@@ -16,7 +16,7 @@ const setup = (on: any, store: Record<string, unknown> = {}) => {
 
 const mountText = ($: any, text: string) =>
   $.ui.mount({
-    plugin: 'terminal-math',
+    plugin: 'term-latex',
     surface: 'terminal',
     component: 'AssistantMessage',
     props: { text, isFirstOfReply: true },
@@ -169,7 +169,7 @@ describe('platforms', () => {
     expect(used).toContain(`${bin}/latex`)
     expect(used).toContain(`${bin}/dvipng`)
     expect(used).toContain('/usr/bin/perl') // pads the picture to the cell grid
-    expect(runs.find((r) => r.argv[0] === `${bin}/latex`)?.cwd).toBe('/Users/f/.cache/claude-terminal-math')
+    expect(runs.find((r) => r.argv[0] === `${bin}/latex`)?.cwd).toBe('/Users/f/.cache/term-latex')
   })
 
   test('Linux: TeX on PATH, cache under XDG_CACHE_HOME', async ($, on) => {
@@ -181,7 +181,7 @@ describe('platforms', () => {
     expect(toasts.length).toBe(0)
     await mountText($, 'Mira $$x^2 + y^2$$')
     const latex = runs.find((r) => r.argv[0] === 'latex' && r.argv[1] !== '--version')
-    expect(latex?.cwd).toBe('/home/f/.xdg/claude-terminal-math')
+    expect(latex?.cwd).toBe('/home/f/.xdg/term-latex')
     expect(runs.some((r) => r.argv[0] === 'dvipng' && r.argv[1] !== '--version')).toBe(true)
   })
 
@@ -208,7 +208,7 @@ describe('platforms', () => {
     expect(toasts[0]).toContain('perl was not found')
     await mountText($, 'Mira $$x^2$$')
     const latex = runs.find((r) => r.argv[0] === `${tl}/latex.exe`)
-    expect(latex?.cwd).toBe('C:/Users/F/AppData/Local/claude-terminal-math')
+    expect(latex?.cwd).toBe('C:/Users/F/AppData/Local/term-latex')
     const dvipng = runs.find((r) => r.argv[0] === `${tl}/dvipng.exe`)
     expect(dvipng?.argv.join(' ')).not.toContain('.raw.png') // straight to the final picture
     expect(runs.some((r) => r.argv.some((a) => a.includes('Compress::Zlib')))).toBe(false)
@@ -303,5 +303,34 @@ describe('perl and the cache', () => {
     const second = runs.filter((r) => r.argv[0] === 'perl' && r.argv[1] === '-e').map((r) => r.argv[2])
     expect(second.some((c) => c.includes('$keep'))).toBe(true)
     expect(second.some((c) => c.includes('unlink $f if -f $f }') && !c.includes('$keep'))).toBe(false)
+  })
+})
+
+describe('the double-struck one', () => {
+  test('inline \\mathbb{1} becomes 𝟙 in the line', async ($, on) => {
+    machine(on, { bare: ['latex', 'dvipng', 'kpsewhich', 'perl'], env: { HOME: '/home/f' } })
+    const ui = await mountText($, 'La identidad es $\\mathbb{1}$ y ya.')
+    expect((await ui.find({ text: /𝟙/ }))?.text).toContain('La identidad es 𝟙 y ya.')
+  })
+
+  test('display \\mathbb{1} is compiled as \\mathds{1} with dsfont', async ($, on) => {
+    const { writes } = machine(on, {
+      bare: ['latex', 'dvipng', 'kpsewhich', 'perl'],
+      env: { HOME: '/home/f' },
+      pkgs: 'standalone.sty\namsmath.sty\nxcolor.sty\ndsfont.sty\n',
+    })
+    await $.session.start(START)
+    await mountText($, 'Completitud: $$\\sum_n |n\\rangle\\langle n| = \\mathbb{1}$$')
+    const tex = writes.find((w) => w.path.endsWith('.tex'))?.text ?? ''
+    expect(tex).toContain('\\mathds{1}')
+    expect(tex).not.toContain('\\mathbb{1}')
+    expect(tex).toContain('dsfont')
+  })
+
+  test('without dsfont it falls back to a bold one', async ($, on) => {
+    const { writes } = machine(on, { bare: ['latex', 'dvipng', 'kpsewhich', 'perl'], env: { HOME: '/home/f' } })
+    await $.session.start(START)
+    await mountText($, 'Completitud: $$\\mathbb{1}$$')
+    expect(writes.find((w) => w.path.endsWith('.tex'))?.text).toContain('\\mathbf{1}')
   })
 })

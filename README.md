@@ -1,8 +1,30 @@
-# terminal-math
+# term-latex
 
-A Claude Code mod that draws LaTeX math in assistant messages as real, centered
-images in the terminal. Inline `$...$` becomes Unicode inside the sentence;
-display math (`$$...$$`, `\[...\]`) is compiled with LaTeX and drawn as a picture.
+**LaTeX equations for [Claude Code](https://claude.com/claude-code), drawn in your terminal.**
+
+A Claude Code plugin (a "mod") that draws the LaTeX math in Claude's replies as real,
+centered images. Inline `$...$` becomes Unicode inside the sentence; display math
+(`$$...$$`, `\[...\]`) is compiled with LaTeX and drawn as a picture.
+
+## Works with Claude Code only
+- It is built on Claude Code's plugin hooks (it rewrites how an assistant message is drawn), so it
+  does **not** work in other tools: not in Codex CLI, not in the claude.ai chat, not in a plain shell.
+- Equation images are drawn only in a **terminal** that supports the kitty graphics protocol.
+  Claude Code's other surfaces (the desktop app's Code tab, the VS Code extension) have not been tried.
+- It has been tested **only with Claude Code in Ghostty on macOS**. Linux and Windows support is
+  written but has not been tried on a real machine (see Platforms).
+- It is an independent project, not made, endorsed or supported by Anthropic. "Claude" and
+  "Claude Code" are trademarks of Anthropic, PBC; they are used here only to say what this
+  plugin works with.
+
+## Why this exists
+Claude is very good at physics and mathematics, and it answers in LaTeX. A terminal cannot
+draw LaTeX, so the answer arrives as raw `\frac{\partial \psi}{\partial t}` that you must
+decode by eye. This mod is meant to speed up scientific work in physics, mathematics and
+related fields for people who use Claude and LaTeX together: you read an equation as an
+equation, check it, and send the source to your `.tex` file with `/math copy`, without leaving
+the terminal. It is a tool for reading and checking maths while you work, not a general
+document renderer.
 
 ## Requirements
 - **A terminal with the kitty graphics protocol.** Ghostty, kitty or WezTerm. Elsewhere the
@@ -20,7 +42,7 @@ display math (`$$...$$`, `\[...\]`) is compiled with LaTeX and drawn as a pictur
 ## Platforms
 | | TeX is looked for | perl | cache |
 |---|---|---|---|
-| **macOS** (tested) | PATH, `/Library/TeX/texbin`, Homebrew | `/usr/bin/perl` | `~/.cache/claude-terminal-math` |
+| **macOS** (tested) | PATH, `/Library/TeX/texbin`, Homebrew | `/usr/bin/perl` | `~/.cache/term-latex` |
 | **Linux** (not yet tested on a real machine) | PATH, `/usr/bin`, `/usr/local/texlive/<year>/bin/<arch>` | system perl | `$XDG_CACHE_HOME` or `~/.cache` |
 | **Windows** (best effort, untested) | PATH, MiKTeX, `C:/texlive/<year>/bin/windows` | TeX Live's or Git's perl, if any | `%LOCALAPPDATA%` |
 
@@ -51,20 +73,20 @@ display math (`$$...$$`, `\[...\]`) is compiled with LaTeX and drawn as a pictur
 
 ## Install
 ```
-/plugin install terminal-math --marketplace FAgurtoS/claude-terminal-math
+/plugin install term-latex --marketplace FAgurtoS/term-latex
 ```
 Answer `y` to add the marketplace, then pick a scope.
 
 ## Load it from a folder
-- One session: `claude --plugin-dir /path/to/terminal-math`
-- Every session: `export CLAUDE_CODE_PLUGIN_DIRS="$HOME/.claude/mods/terminal-math"` in `~/.zshrc`
+- One session: `claude --plugin-dir /path/to/term-latex`
+- Every session: `export CLAUDE_CODE_PLUGIN_DIRS="$HOME/.claude/mods/term-latex"` in `~/.zshrc`
 
 ## Develop
 - `claude plugin validate .` and `claude plugin test .`
 
 ## Remove it
 Delete this folder, the `CLAUDE_CODE_PLUGIN_DIRS` line if you added it, and
-optionally `~/.cache/claude-terminal-math`. Nothing else was changed.
+optionally `~/.cache/term-latex`. Nothing else was changed.
 
 ## License
 MIT, see `LICENSE`.

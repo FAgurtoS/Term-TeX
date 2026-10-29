@@ -68,11 +68,11 @@ async function detectPlatform($: any): Promise<Platform> {
 async function cacheDir($: any): Promise<string> {
   if (platform === 'win') {
     const base = (await $.env.get('LOCALAPPDATA')) ?? (await $.env.get('USERPROFILE')) ?? 'C:/Temp'
-    return `${String(base).replaceAll('\\', '/')}/claude-terminal-math`
+    return `${String(base).replaceAll('\\', '/')}/term-latex`
   }
   const xdg = await $.env.get('XDG_CACHE_HOME')
-  if (xdg) return `${xdg}/claude-terminal-math`
-  return `${(await $.env.get('HOME')) ?? ''}/.cache/claude-terminal-math`
+  if (xdg) return `${xdg}/term-latex`
+  return `${(await $.env.get('HOME')) ?? ''}/.cache/term-latex`
 }
 
 type Piece =
@@ -119,7 +119,7 @@ const SUB: Record<string, string> = {
   l: 'ₗ', m: 'ₘ', n: 'ₙ', o: 'ₒ', p: 'ₚ', r: 'ᵣ', s: 'ₛ', t: 'ₜ', u: 'ᵤ', v: 'ᵥ', x: 'ₓ', β: 'ᵦ', γ: 'ᵧ', ρ: 'ᵨ', φ: 'ᵩ', χ: 'ᵪ',
 }
 const CAL: Record<string, string> = { L: 'ℒ', H: 'ℋ', F: 'ℱ', B: 'ℬ', E: 'ℰ', I: 'ℐ', M: 'ℳ', R: 'ℛ' }
-const BB: Record<string, string> = { R: 'ℝ', C: 'ℂ', N: 'ℕ', Z: 'ℤ', Q: 'ℚ', H: 'ℍ', P: 'ℙ' }
+const BB: Record<string, string> = { '1': '𝟙', R: 'ℝ', C: 'ℂ', N: 'ℕ', Z: 'ℤ', Q: 'ℚ', H: 'ℍ', P: 'ℙ' }
 const ACCENT: Record<string, string> = { slashed: '\u0338', vec: '⃗', hat: '̂', bar: '̄', overline: '̄', tilde: '̃', dot: '̇', ddot: '̈' }
 const WORD = /^[\p{L}\p{N}\p{M}.]+$/u
 
@@ -531,7 +531,10 @@ async function render($: any, tex: string, color: string, sc: number, ratio: num
   }
 }
 
-async function compile($: any, tex: string, color: string, cw: number, ch: number, key: string): Promise<Img | null> {
+async function compile($: any, source: string, color: string, cw: number, ch: number, key: string): Promise<Img | null> {
+  // `\mathbb{1}` looks right in MathJax/KaTeX but amssymb draws a different glyph for it;
+  // the double-struck one comes from dsfont (else a bold one).
+  const tex = source.replace(/\\mathbb\s*\{\s*1\s*\}/g, pkgs.includes('dsfont') ? '\\mathds{1}' : '\\mathbf{1}')
   const dir = await cacheDir($)
   const png = `${dir}/${key}.png`
   const grid = perlGrid // pad to the cell grid (needs perl with Compress::Zlib), else a tight picture
@@ -616,7 +619,7 @@ async function compile($: any, tex: string, color: string, cw: number, ch: numbe
     cache.set(key, img)
     return img
   } catch (err) {
-    $.ui.log(`terminal-math: ${String(err)}`, { to: 'debug' })
+    $.ui.log(`term-latex: ${String(err)}`, { to: 'debug' })
     lastError = String(err).replace(/^Error: /, '')
     // Only a LaTeX error is final; a process that was killed or a busy disk is tried again.
     if (String(err).includes('latex') || String(err).startsWith('Error: !')) cache.set(key, null)
@@ -742,7 +745,7 @@ export const register: Register = (on) => {
         : platform === 'win' ? 'TeX Live or Git for Windows bring a perl.' : ''
     const perlWarned = await $.store.get('perlWarned')
     if (noGrid && perlWarned !== noGrid) {
-      $.ui.toast(`terminal-math: ${noGrid}; equations are drawn at their natural size, a little less exact. ${perlHint}`.trim())
+      $.ui.toast(`term-latex: ${noGrid}; equations are drawn at their natural size, a little less exact. ${perlHint}`.trim())
       await $.store.set('perlWarned', noGrid)
     } else if (!noGrid && perlWarned) {
       await $.store.delete('perlWarned')
@@ -752,7 +755,7 @@ export const register: Register = (on) => {
     if (missing && warned !== missing) {
       const hint =
         platform === 'mac' ? 'Install MacTeX.' : platform === 'linux' ? 'Install TeX Live (texlive-latex-extra, dvipng).' : 'Install MiKTeX or TeX Live.'
-      $.ui.toast(`terminal-math: missing ${missing}; equations stay as text. ${hint}`)
+      $.ui.toast(`term-latex: missing ${missing}; equations stay as text. ${hint}`)
       await $.store.set('depsWarned', missing)
     } else if (!missing && warned) {
       await $.store.delete('depsWarned')

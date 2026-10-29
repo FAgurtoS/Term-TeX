@@ -1,5 +1,5 @@
 {
-  "name": "terminal-math",
+  "name": "term-latex",
   "owner": { "name": "Felipe Agurto Sepúlveda" },
-  "plugins": [{ "name": "terminal-math", "source": "./" }]
+  "plugins": [{ "name": "term-latex", "source": "./" }]
 }
