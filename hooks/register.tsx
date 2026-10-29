@@ -10,6 +10,11 @@ let latexBin = 'latex'
 let dvipngBin = 'dvipng'
 let kpsewhichBin: string | null = 'kpsewhich'
 let perlBin: string | null = null
+// perl can pad pictures to the cell grid only with its Compress::Zlib module.
+let perlGrid = false
+
+// Bump when what is kept in the cache changes shape; the next start empties it.
+const CACHE_GEN = 3
 
 const TEX_YEARS = ['2030', '2029', '2028', '2027', '2026', '2025', '2024', '2023', '2022']
 
@@ -370,9 +375,64 @@ rename("$out.part", $out) or die "rename: $!";`
 
 const FORBIDDEN = /\\(input|include|openin|openout|read|readline|write|immediate|special|usepackage|documentclass|catcode|csname|InputIfFileExists|verbatiminput|lstinputlisting)(?![a-zA-Z])/
 
+const DARK_INK = 'D8DEE9'
+const LIGHT_INK = '1F2430'
+
+// Whether the terminal is dark, as best it can be told: the terminal's own
+// COLORFGBG, then the system's light/dark setting; null when neither says.
+let autoDark: boolean | null = null
+// How the ink colour was chosen, for `/math debug`.
+let colorInfo = ''
+
+async function detectAppearance($: any): Promise<boolean | null> {
+  const fgbg = String((await $.env.get('COLORFGBG')) ?? '')
+  if (fgbg) {
+    const bg = Number(fgbg.split(';').pop())
+    if (Number.isFinite(bg)) return bg <= 6 || bg === 8 // the dark entries of the 16-colour palette
+  }
+  try {
+    if (platform === 'mac') {
+      // Light mode has no AppleInterfaceStyle at all, so the command fails then.
+      const r = await $.process.run(['defaults', 'read', '-g', 'AppleInterfaceStyle'], { timeoutMs: 5000 })
+      return r.exitCode === 0 && /dark/i.test(String(r.stdout))
+    }
+    if (platform === 'linux') {
+      const r = await $.process.run(['gsettings', 'get', 'org.gnome.desktop.interface', 'color-scheme'], { timeoutMs: 5000 })
+      if (r.exitCode === 0) return /dark/i.test(String(r.stdout))
+    }
+    if (platform === 'win') {
+      const r = await $.process.run(
+        ['reg', 'query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize', '/v', 'AppsUseLightTheme'],
+        { timeoutMs: 5000 },
+      )
+      if (r.exitCode === 0) return /0x0\b/.test(String(r.stdout))
+    }
+  } catch {
+    // no way to tell
+  }
+  return null
+}
+
+// The colour equations are drawn in: set by hand (`/math color`), else from the
+// Claude Code theme; for "auto" and unknown themes, from the detected appearance.
 async function themeColor($: any): Promise<string> {
+  const manual = String((await $.store.get('color')) ?? '')
+  if (manual === 'dark' || manual === 'light') {
+    colorInfo = `set by hand: ${manual}`
+    return manual === 'dark' ? DARK_INK : LIGHT_INK
+  }
+  if (/^[0-9A-Fa-f]{6}$/.test(manual)) {
+    colorInfo = `set by hand: ${manual.toUpperCase()}`
+    return manual.toUpperCase()
+  }
   const row = (await $.config.list()).find((r: any) => r.key === 'theme')
-  return String(row?.value ?? 'dark').includes('light') ? '1F2430' : 'D8DEE9'
+  const name = String(row?.value ?? 'dark')
+  let dark: boolean
+  if (name.includes('light')) dark = false
+  else if (name.includes('dark')) dark = true
+  else dark = autoDark ?? true
+  colorInfo = `theme "${name}"${name.includes('light') || name.includes('dark') ? '' : autoDark === null ? ', appearance unknown, assuming dark' : `, detected ${autoDark ? 'dark' : 'light'}`} -> ${dark ? 'light' : 'dark'} ink`
+  return dark ? DARK_INK : LIGHT_INK
 }
 
 type Img = { b64: string; cols: number; rows: number }
@@ -458,7 +518,7 @@ async function render($: any, tex: string, color: string, sc: number, ratio: num
   if (FORBIDDEN.test(tex)) return null
   const cw = 7 / sc // TeX points per terminal column
   const ch = 7 / ratio / sc // and per terminal row
-  const key = hash(`${DPI}|${perlBin ? 'grid' : 'tight'}|${color}|${cw.toFixed(3)}|${ch.toFixed(3)}|${pkgs.length}|${tex}`)
+  const key = hash(`${DPI}|${perlGrid ? 'grid' : 'tight'}|${color}|${cw.toFixed(3)}|${ch.toFixed(3)}|${pkgs.length}|${tex}`)
   if (cache.has(key)) return cache.get(key) ?? null
   const running = inflight.get(key)
   if (running) return running
@@ -474,7 +534,7 @@ async function render($: any, tex: string, color: string, sc: number, ratio: num
 async function compile($: any, tex: string, color: string, cw: number, ch: number, key: string): Promise<Img | null> {
   const dir = await cacheDir($)
   const png = `${dir}/${key}.png`
-  const grid = perlBin !== null // pad to the cell grid (needs perl), else a tight picture
+  const grid = perlGrid // pad to the cell grid (needs perl with Compress::Zlib), else a tight picture
   const ratio = cw / ch
   try {
     if (!(await $.fs.exists(png))) {
@@ -622,6 +682,11 @@ async function scanTeX($: any): Promise<{ missing: string[]; pkgs: string[] }> {
   if (dvipng) dvipngBin = dvipng
   else missing.push('dvipng')
   perlBin = await firstThatWorks($, perlCandidates(platform))
+  perlGrid = false
+  if (perlBin) {
+    const z = await $.process.run([perlBin, '-MCompress::Zlib', '-e', '1'], { timeoutMs: 8000 }).catch(() => null)
+    perlGrid = !!z && z.exitCode === 0
+  }
   kpsewhichBin = await firstThatWorks($, toolCandidates('kpsewhich', platform, home, local))
   let found: string[] = []
   if (missing.length === 0 && kpsewhichBin) {
@@ -639,7 +704,7 @@ export const register: Register = (on) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'math',
-      description: 'LaTeX math as images: /math on | off | size N | ratio R | copy [N] | list | reset | debug',
+      description: 'LaTeX math as images: /math on | off | size N | color C | ratio R | copy [N] | list | reset | debug',
     })
     enabled = (await $.store.get('enabled')) !== false
     const saved = Number(await $.store.get('scale'))
@@ -649,15 +714,39 @@ export const register: Register = (on) => {
     const tex = await scanTeX($)
     pkgs = tex.pkgs
     const dir = await cacheDir($)
-    // Old renders are dropped when a session opens; nothing has to run at close.
+    // The cache layout changed (resolution, naming): the first start after that empties it.
+    const wipe = (await $.store.get('cacheGen')) !== CACHE_GEN
+    // Pictures are kept 30 days; the files made while building them (.tex, .log, .dvi, ...) one day.
+    const sweep = wipe
+      ? 'opendir(my $d,$ARGV[0]) or exit; for (readdir $d) { my $f="$ARGV[0]/$_"; unlink $f if -f $f }'
+      : 'opendir(my $d,$ARGV[0]) or exit; for (readdir $d) { my $f="$ARGV[0]/$_"; next unless -f $f; my $keep = ($f =~ /\\.png$/ && $f !~ /\\.raw\\.png$/) ? 30 : 1; unlink $f if -M $f > $keep }'
     if (perlBin) {
-      const sweep = 'opendir(my $d,$ARGV[0]) or exit; for (readdir $d) { my $f="$ARGV[0]/$_"; unlink $f if -f $f && -M $f > 30 }'
       await $.process.run([perlBin, '-e', sweep, dir]).catch(() => undefined)
     } else if (platform !== 'win') {
-      await $.process.run(['find', dir, '-type', 'f', '-mtime', '+30', '-delete']).catch(() => undefined)
+      const runs = wipe
+        ? [['find', dir, '-type', 'f', '-delete']]
+        : [
+            ['find', dir, '-type', 'f', '-name', '*.png', '!', '-name', '*.raw.png', '-mtime', '+30', '-delete'],
+            ['find', dir, '-type', 'f', '(', '!', '-name', '*.png', '-o', '-name', '*.raw.png', ')', '-mtime', '+1', '-delete'],
+          ]
+      for (const argv of runs) await $.process.run(argv).catch(() => undefined)
     }
+    if (wipe) await $.store.set('cacheGen', CACHE_GEN)
+    autoDark = await detectAppearance($)
     const manual = Number(await $.store.get('ratio'))
     cellRatio = manual > 0.3 && manual < 0.8 ? manual : ((await measureCell($)) ?? 0.5)
+    const noGrid = !perlBin ? 'perl was not found' : !perlGrid ? 'perl has no Compress::Zlib module' : ''
+    const perlHint =
+      platform === 'linux'
+        ? 'Debian/Ubuntu: sudo apt install perl-modules; Fedora: sudo dnf install perl-IO-Compress.'
+        : platform === 'win' ? 'TeX Live or Git for Windows bring a perl.' : ''
+    const perlWarned = await $.store.get('perlWarned')
+    if (noGrid && perlWarned !== noGrid) {
+      $.ui.toast(`terminal-math: ${noGrid}; equations are drawn at their natural size, a little less exact. ${perlHint}`.trim())
+      await $.store.set('perlWarned', noGrid)
+    } else if (!noGrid && perlWarned) {
+      await $.store.delete('perlWarned')
+    }
     const missing = tex.missing.join(', ')
     const warned = await $.store.get('depsWarned')
     if (missing && warned !== missing) {
@@ -688,12 +777,26 @@ export const register: Register = (on) => {
       $.ui.invalidate('ui.render')
       return { text: `cell ratio ${v} (remembered)` }
     }
+    if (a === 'color') {
+      const v = n.replace(/^#/, '')
+      if (v === 'auto') {
+        await $.store.delete('color')
+      } else if (v === 'dark' || v === 'light' || /^[0-9A-Fa-f]{6}$/.test(v)) {
+        await $.store.set('color', v)
+      } else {
+        return { text: `ink colour: ${colorInfo || 'not drawn yet'}. /math color dark | light | auto | RRGGBB` }
+      }
+      cache.clear()
+      $.ui.invalidate('ui.render')
+      return { text: v === 'auto' ? 'ink colour follows the theme again' : `ink colour ${v} (remembered)` }
+    }
     if (a === 'reset') {
+      autoDark = await detectAppearance($)
       cache.clear()
       $.ui.invalidate('ui.render')
       return { text: 'Equation cache of this session cleared; redrawing.' }
     }
-    if (a === 'debug') return { text: [lastLayout || 'No equation drawn yet.', lastError && `Last LaTeX error: ${lastError}`].filter(Boolean).join('\n') }
+    if (a === 'debug') return { text: [lastLayout || 'No equation drawn yet.', colorInfo && `Ink: ${colorInfo}`, lastError && `Last LaTeX error: ${lastError}`].filter(Boolean).join('\n') }
     if (a === 'size') {
       const v = Number(n.replace(',', '.'))
       if (!(v >= 0.5 && v <= 5)) return { text: `size is ${scale}; use /math size N with N between 0.5 and 5` }

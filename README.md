@@ -10,7 +10,9 @@ display math (`$$...$$`, `\[...\]`) is compiled with LaTeX and drawn as a pictur
 - **TeX** providing `latex`, `dvipng` and the packages `standalone`, `amsmath`, `xcolor`.
   If something is missing, a toast says so once.
 - **perl** (optional, found automatically) pads each equation to the terminal's cell grid and
-  measures the terminal. Without it equations are drawn at their natural size, slightly less exact.
+  measures the terminal. It needs its `Compress::Zlib` module (Debian/Ubuntu: `perl-modules`;
+  Fedora: `perl-IO-Compress`). Without perl, or without that module, equations are drawn at
+  their natural size, slightly less exact, and a toast says why once.
 - Optional LaTeX packages are loaded per equation when installed (a full TeX has them all):
   mathtools, bm, mathrsfs, cancel, physics, siunitx, tensor, upgreek, esint, stmaryrd,
   dsfont, mhchem, cases, units, nicefrac, xfrac, accents, extarrows, yhmath, mathdots, slashed.
@@ -30,7 +32,7 @@ display math (`$$...$$`, `\[...\]`) is compiled with LaTeX and drawn as a pictur
 
 ## Use
 - On by default. `/math on|off` toggles it and is remembered across sessions.
-- `/math ratio R` sets the cell shape by hand. `/math size N` sets how large equations are drawn (default 1.75, remembered); `/math debug` shows the last layout.
+- `/math color C` sets the ink colour. `/math ratio R` sets the cell shape by hand. `/math size N` sets how large equations are drawn (default 1.75, remembered); `/math debug` shows the last layout.
 - `/math copy [N]` copies the LaTeX of the last (or N-th last) equation drawn; `/math list` shows the last five. Selecting an equation with the mouse copies the terminal's picture cells, not the LaTeX.
 - Inline formulas Unicode cannot express (limits, nested powers, matrices) are
   drawn as an image on their own line.
@@ -38,10 +40,14 @@ display math (`$$...$$`, `\[...\]`) is compiled with LaTeX and drawn as a pictur
 
 ## How it works and what it touches
 - Everything runs locally; nothing goes over the network.
-- Renders are cached in `~/.cache/claude-terminal-math` and dropped after 30 days.
+- Renders are cached (see Platforms for where). Pictures are dropped after 30 days and the
+  files made while building them after one day.
 - LaTeX runs with shell escape off and restricted file access, and formulas that
   use file or definition primitives (`\input`, `\write`, `\usepackage`...) are not compiled.
-- Image colour follows the Claude Code theme (light or dark).
+- Image colour follows the Claude Code theme. For the `auto` theme the mod asks the terminal
+  (`COLORFGBG`) and then the system's light/dark setting (macOS, GNOME, Windows), and assumes
+  dark if neither says. Wrong guess, or a terminal that differs from the system? `/math color
+  dark|light|RRGGBB` sets the ink by hand and `/math color auto` gives the choice back.
 
 ## Install
 ```

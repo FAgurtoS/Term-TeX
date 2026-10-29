@@ -98,7 +98,7 @@ describe('/math size', () => {
 
 // A fake machine: which commands run when called by bare name, which files exist,
 // what the environment holds; every process the mod starts is recorded.
-type Machine = { bare?: string[]; files?: string[]; env?: Record<string, string>; pkgs?: string }
+type Machine = { bare?: string[]; files?: string[]; env?: Record<string, string>; pkgs?: string; noZlib?: boolean; dark?: boolean; theme?: string }
 const PNG = (() => {
   const b = new Uint8Array(33)
   b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52])
@@ -111,7 +111,8 @@ const machine = (on: any, m: Machine, store: Record<string, unknown> = {}) => {
   const runs: { argv: string[]; cwd?: string }[] = []
   const toasts: string[] = []
   const made = new Set<string>()
-  on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark' }] }))
+  const writes: { path: string; text: string }[] = []
+  on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: m.theme ?? 'dark' }] }))
   on('store.get', ($: any, e: any) => ({ value: store[e.key] }))
   on('store.set', ($: any, e: any) => ((store[e.key] = e.value), { value: undefined }))
   on('store.delete', ($: any, e: any) => (delete store[e.key], { value: undefined }))
@@ -124,11 +125,13 @@ const machine = (on: any, m: Machine, store: Record<string, unknown> = {}) => {
   on('fs.exists', ($: any, e: any) => ({
     value: (m.files ?? []).some((f) => e.path === f || e.path.endsWith(`/${f}`)) || [...made].some((f) => e.path.endsWith(f)),
   }))
-  on('fs.write', ($: any, e: any) => (made.add(e.path), { value: undefined }))
+  on('fs.write', ($: any, e: any) => (made.add(e.path), writes.push({ path: e.path, text: String(e.text ?? e.content ?? '') }), { value: undefined }))
   on('fs.read', () => ({ value: { base64: PNG } }))
   on('process.run', ($: any, e: any) => {
     const [cmd, arg] = e.argv
     runs.push({ argv: [...e.argv], cwd: e.init?.cwd })
+    if (arg === '-MCompress::Zlib') return { value: { exitCode: m.noZlib ? 2 : 0, stdout: '', stderr: '' } }
+    if (cmd === 'defaults') return { value: { exitCode: m.dark ? 0 : 1, stdout: m.dark ? 'Dark\n' : '', stderr: '' } }
     if (arg === '--version') return { value: { exitCode: (m.bare ?? []).includes(cmd) ? 0 : 127, stdout: '', stderr: '' } }
     if (cmd.endsWith('kpsewhich') || cmd.endsWith('kpsewhich.exe')) {
       return { value: { exitCode: 0, stdout: m.pkgs ?? 'standalone.sty\namsmath.sty\nxcolor.sty\n', stderr: '' } }
@@ -139,7 +142,7 @@ const machine = (on: any, m: Machine, store: Record<string, unknown> = {}) => {
   })
   on('session.start', ($: any, e: any) => ({ cwd: e.cwd }))
   on('ui.render', { component: 'AssistantMessage' }, () => ({ type: 'Text', props: {}, children: ['engine'] }))
-  return { runs, toasts, made }
+  return { runs, toasts, made, writes }
 }
 const START = { cwd: '/tmp', surface: 'terminal', isInteractive: true } as any
 
@@ -148,9 +151,9 @@ describe('platforms', () => {
     const { toasts } = machine(on, { env: { HOME: '/home/f' } })
     await $.session.start(START)
     await $.session.start(START)
-    expect(toasts.length).toBe(1)
-    expect(toasts[0]).toContain('latex, dvipng')
-    expect(toasts[0]).toContain('TeX Live')
+    const tex = toasts.filter((t) => t.includes('missing latex'))
+    expect(tex.length).toBe(1)
+    expect(tex[0]).toContain('TeX Live')
   })
 
   test('macOS: finds MacTeX outside PATH and compiles there', async ($, on) => {
@@ -186,7 +189,7 @@ describe('platforms', () => {
     const tl = '/usr/local/texlive/2025/bin/x86_64-linux'
     const { runs, toasts } = machine(on, {
       env: { HOME: '/home/f' },
-      files: [`${tl}/latex`, `${tl}/dvipng`, `${tl}/kpsewhich`],
+      files: [`${tl}/latex`, `${tl}/dvipng`, `${tl}/kpsewhich`, '/usr/bin/perl'],
     })
     await $.session.start(START)
     expect(toasts.length).toBe(0)
@@ -201,7 +204,8 @@ describe('platforms', () => {
       files: [`${tl}/latex.exe`, `${tl}/dvipng.exe`, `${tl}/kpsewhich.exe`],
     })
     await $.session.start(START)
-    expect(toasts).toEqual([])
+    expect(toasts.length).toBe(1) // only: no perl, pictures at their natural size
+    expect(toasts[0]).toContain('perl was not found')
     await mountText($, 'Mira $$x^2$$')
     const latex = runs.find((r) => r.argv[0] === `${tl}/latex.exe`)
     expect(latex?.cwd).toBe('C:/Users/F/AppData/Local/claude-terminal-math')
@@ -220,5 +224,84 @@ describe('platforms', () => {
     expect(store.ratio).toBe(0.5)
     const bad = await $.command.run({ command: 'math', args: 'ratio 9', origin: { kind: 'composer' } })
     expect(String((bad as any).text)).toContain('/math ratio auto')
+  })
+})
+
+const inkOf = (writes: { path: string; text: string }[]) =>
+  writes.find((w) => w.path.endsWith('.tex'))?.text.match(/definecolor\{fg\}\{HTML\}\{(\w+)\}/)?.[1]
+
+describe('ink colour', () => {
+  const base = { bare: ['latex', 'dvipng', 'kpsewhich', 'perl'], env: { HOME: '/home/f' } }
+
+  test('light and dark themes pick their own ink', async ($, on) => {
+    const { writes } = machine(on, { ...base, theme: 'light-daltonized' })
+    await $.session.start(START)
+    await mountText($, 'Mira $$x^2$$')
+    expect(inkOf(writes)).toBe('1F2430')
+  })
+
+  test('theme "auto": the terminal says it is light (COLORFGBG)', async ($, on) => {
+    const { writes } = machine(on, { ...base, theme: 'auto', env: { ...base.env, COLORFGBG: '0;15' } })
+    await $.session.start(START)
+    await mountText($, 'Mira $$x^2$$')
+    expect(inkOf(writes)).toBe('1F2430')
+  })
+
+  test('theme "auto": a dark terminal gets the light ink', async ($, on) => {
+    const { writes } = machine(on, { ...base, theme: 'auto', env: { ...base.env, COLORFGBG: '15;0' } })
+    await $.session.start(START)
+    await mountText($, 'Mira $$x^2$$')
+    expect(inkOf(writes)).toBe('D8DEE9')
+  })
+
+  test('theme "auto" on a Mac in light mode, with no terminal hint', async ($, on) => {
+    const { writes } = machine(on, { ...base, theme: 'auto', files: ['/System/Library/CoreServices'], dark: false })
+    await $.session.start(START)
+    await mountText($, 'Mira $$x^2$$')
+    expect(inkOf(writes)).toBe('1F2430')
+  })
+
+  test('/math color overrides the theme, and "auto" gives the choice back', async ($, on) => {
+    const store: Record<string, unknown> = {}
+    const { writes } = machine(on, { ...base, theme: 'dark' }, store)
+    await $.session.start(START)
+    await $.command.run({ command: 'math', args: 'color #ff8800', origin: { kind: 'composer' } })
+    expect(store.color).toBe('ff8800')
+    await mountText($, 'Mira $$x^2$$')
+    expect(inkOf(writes)).toBe('FF8800')
+    await $.command.run({ command: 'math', args: 'color auto', origin: { kind: 'composer' } })
+    expect(store.color).toBeUndefined()
+    const bad = await $.command.run({ command: 'math', args: 'color purple', origin: { kind: 'composer' } })
+    expect(String((bad as any).text)).toContain('/math color dark')
+  })
+})
+
+describe('perl and the cache', () => {
+  const base = { bare: ['latex', 'dvipng', 'kpsewhich', 'perl'], env: { HOME: '/home/f' } }
+
+  test('perl without Compress::Zlib: warns once and draws tight pictures', async ($, on) => {
+    const { toasts, runs } = machine(on, { ...base, noZlib: true })
+    await $.session.start(START)
+    await $.session.start(START)
+    const t = toasts.filter((x) => x.includes('Compress::Zlib'))
+    expect(t.length).toBe(1)
+    expect(t[0]).toContain('perl-modules')
+    await mountText($, 'Mira $$x^2$$')
+    const dvipng = runs.find((r) => r.argv[0] === 'dvipng' && r.argv[1] !== '--version')
+    expect(dvipng?.argv.join(' ')).not.toContain('.raw.png')
+  })
+
+  test('the cache is emptied once when its layout changes, then only swept', async ($, on) => {
+    const store: Record<string, unknown> = {}
+    const { runs } = machine(on, base, store)
+    await $.session.start(START)
+    expect(store.cacheGen).toBe(3)
+    const first = runs.filter((r) => r.argv[0] === 'perl' && r.argv[1] === '-e').map((r) => r.argv[2])
+    expect(first.some((c) => c.includes('unlink $f if -f $f }') && !c.includes('$keep'))).toBe(true)
+    runs.length = 0
+    await $.session.start(START)
+    const second = runs.filter((r) => r.argv[0] === 'perl' && r.argv[1] === '-e').map((r) => r.argv[2])
+    expect(second.some((c) => c.includes('$keep'))).toBe(true)
+    expect(second.some((c) => c.includes('unlink $f if -f $f }') && !c.includes('$keep'))).toBe(false)
   })
 })
