@@ -1,9 +1,10 @@
-# term-latex
+# Term-TeX
 
-**LaTeX equations for [Claude Code](https://claude.com/claude-code), drawn in your terminal.**
+**Harness terminal LaTeX for Claude Code.**
 
-A Claude Code plugin (a "mod") that draws the LaTeX math in Claude's replies as real,
-centered images. Inline `$...$` becomes Unicode inside the sentence; display math
+A plugin for [Claude Code](https://claude.com/claude-code)'s harness (the layer that runs the model,
+its tools and its terminal interface) that draws the LaTeX math in Claude's replies as real,
+centered images in your terminal. Inline `$...$` becomes Unicode inside the sentence; display math
 (`$$...$$`, `\[...\]`) is compiled with LaTeX and drawn as a picture.
 
 ## Works with Claude Code only
@@ -42,7 +43,7 @@ document renderer.
 ## Platforms
 | | TeX is looked for | perl | cache |
 |---|---|---|---|
-| **macOS** (tested) | PATH, `/Library/TeX/texbin`, Homebrew | `/usr/bin/perl` | `~/.cache/term-latex` |
+| **macOS** (tested) | PATH, `/Library/TeX/texbin`, Homebrew | `/usr/bin/perl` | `~/.cache/term-tex` |
 | **Linux** (not yet tested on a real machine) | PATH, `/usr/bin`, `/usr/local/texlive/<year>/bin/<arch>` | system perl | `$XDG_CACHE_HOME` or `~/.cache` |
 | **Windows** (best effort, untested) | PATH, MiKTeX, `C:/texlive/<year>/bin/windows` | TeX Live's or Git's perl, if any | `%LOCALAPPDATA%` |
 
@@ -74,20 +75,20 @@ document renderer.
 
 ## Install
 ```
-/plugin install term-latex --marketplace FAgurtoS/term-latex
+/plugin install term-tex --marketplace FAgurtoS/Term-TeX
 ```
 Answer `y` to add the marketplace, then pick a scope.
 
 ## Load it from a folder
-- One session: `claude --plugin-dir /path/to/term-latex`
-- Every session: `export CLAUDE_CODE_PLUGIN_DIRS="$HOME/.claude/mods/term-latex"` in `~/.zshrc`
+- One session: `claude --plugin-dir /path/to/term-tex`
+- Every session: `export CLAUDE_CODE_PLUGIN_DIRS="$HOME/.claude/mods/term-tex"` in `~/.zshrc`
 
 ## Develop
 - `claude plugin validate .` and `claude plugin test .`
 
 ## Remove it
 Delete this folder, the `CLAUDE_CODE_PLUGIN_DIRS` line if you added it, and
-optionally `~/.cache/term-latex`. Nothing else was changed.
+optionally `~/.cache/term-tex`. Nothing else was changed.
 
 ## License
 MIT, see `LICENSE`.

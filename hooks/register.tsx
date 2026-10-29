@@ -68,11 +68,11 @@ async function detectPlatform($: any): Promise<Platform> {
 async function cacheDir($: any): Promise<string> {
   if (platform === 'win') {
     const base = (await $.env.get('LOCALAPPDATA')) ?? (await $.env.get('USERPROFILE')) ?? 'C:/Temp'
-    return `${String(base).replaceAll('\\', '/')}/term-latex`
+    return `${String(base).replaceAll('\\', '/')}/term-tex`
   }
   const xdg = await $.env.get('XDG_CACHE_HOME')
-  if (xdg) return `${xdg}/term-latex`
-  return `${(await $.env.get('HOME')) ?? ''}/.cache/term-latex`
+  if (xdg) return `${xdg}/term-tex`
+  return `${(await $.env.get('HOME')) ?? ''}/.cache/term-tex`
 }
 
 type Piece =
@@ -695,7 +695,7 @@ async function compile($: any, source: string, color: string, cw: number, ch: nu
     cache.set(key, img)
     return img
   } catch (err) {
-    $.ui.log(`term-latex: ${String(err)}`, { to: 'debug' })
+    $.ui.log(`Term-TeX: ${String(err)}`, { to: 'debug' })
     lastError = String(err).replace(/^Error: /, '')
     // Only a LaTeX error is final; a process that was killed or a busy disk is tried again.
     if (String(err).includes('latex') || String(err).startsWith('Error: !')) cache.set(key, null)
@@ -821,7 +821,7 @@ export const register: Register = (on) => {
         : platform === 'win' ? 'TeX Live or Git for Windows bring a perl.' : ''
     const perlWarned = await $.store.get('perlWarned')
     if (noGrid && perlWarned !== noGrid) {
-      $.ui.toast(`term-latex: ${noGrid}; equations are drawn at their natural size, a little less exact. ${perlHint}`.trim())
+      $.ui.toast(`Term-TeX: ${noGrid}; equations are drawn at their natural size, a little less exact. ${perlHint}`.trim())
       await $.store.set('perlWarned', noGrid)
     } else if (!noGrid && perlWarned) {
       await $.store.delete('perlWarned')
@@ -831,7 +831,7 @@ export const register: Register = (on) => {
     if (missing && warned !== missing) {
       const hint =
         platform === 'mac' ? 'Install MacTeX.' : platform === 'linux' ? 'Install TeX Live (texlive-latex-extra, dvipng).' : 'Install MiKTeX or TeX Live.'
-      $.ui.toast(`term-latex: missing ${missing}; equations stay as text. ${hint}`)
+      $.ui.toast(`Term-TeX: missing ${missing}; equations stay as text. ${hint}`)
       await $.store.set('depsWarned', missing)
     } else if (!missing && warned) {
       await $.store.delete('depsWarned')

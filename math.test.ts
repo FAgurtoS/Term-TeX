@@ -16,7 +16,7 @@ const setup = (on: any, store: Record<string, unknown> = {}) => {
 
 const mountText = ($: any, text: string) =>
   $.ui.mount({
-    plugin: 'term-latex',
+    plugin: 'term-tex',
     surface: 'terminal',
     component: 'AssistantMessage',
     props: { text, isFirstOfReply: true },
@@ -169,7 +169,7 @@ describe('platforms', () => {
     expect(used).toContain(`${bin}/latex`)
     expect(used).toContain(`${bin}/dvipng`)
     expect(used).toContain('/usr/bin/perl') // pads the picture to the cell grid
-    expect(runs.find((r) => r.argv[0] === `${bin}/latex`)?.cwd).toBe('/Users/f/.cache/term-latex')
+    expect(runs.find((r) => r.argv[0] === `${bin}/latex`)?.cwd).toBe('/Users/f/.cache/term-tex')
   })
 
   test('Linux: TeX on PATH, cache under XDG_CACHE_HOME', async ($, on) => {
@@ -181,7 +181,7 @@ describe('platforms', () => {
     expect(toasts.length).toBe(0)
     await mountText($, 'Mira $$x^2 + y^2$$')
     const latex = runs.find((r) => r.argv[0] === 'latex' && r.argv[1] !== '--version')
-    expect(latex?.cwd).toBe('/home/f/.xdg/term-latex')
+    expect(latex?.cwd).toBe('/home/f/.xdg/term-tex')
     expect(runs.some((r) => r.argv[0] === 'dvipng' && r.argv[1] !== '--version')).toBe(true)
   })
 
@@ -208,7 +208,7 @@ describe('platforms', () => {
     expect(toasts[0]).toContain('perl was not found')
     await mountText($, 'Mira $$x^2$$')
     const latex = runs.find((r) => r.argv[0] === `${tl}/latex.exe`)
-    expect(latex?.cwd).toBe('C:/Users/F/AppData/Local/term-latex')
+    expect(latex?.cwd).toBe('C:/Users/F/AppData/Local/term-tex')
     const dvipng = runs.find((r) => r.argv[0] === `${tl}/dvipng.exe`)
     expect(dvipng?.argv.join(' ')).not.toContain('.raw.png') // straight to the final picture
     expect(runs.some((r) => r.argv.some((a) => a.includes('Compress::Zlib')))).toBe(false)

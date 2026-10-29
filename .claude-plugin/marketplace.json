@@ -1,5 +1,13 @@
 {
-  "name": "term-latex",
-  "owner": { "name": "Felipe Agurto Sepúlveda" },
-  "plugins": [{ "name": "term-latex", "source": "./" }]
+  "name": "term-tex",
+  "owner": {
+    "name": "Felipe Agurto Sepúlveda"
+  },
+  "plugins": [
+    {
+      "name": "term-tex",
+      "source": "./"
+    }
+  ],
+  "description": "Term-TeX: harness terminal LaTeX for Claude Code"
 }

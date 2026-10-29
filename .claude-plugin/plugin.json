@@ -1,10 +1,25 @@
 {
-  "name": "term-latex",
-  "version": "0.4.2",
-  "description": "LaTeX equations for Claude Code, drawn in the terminal: display math as real images (latex + dvipng, kitty graphics), inline math as Unicode. Toggle with /math.",
-  "author": { "name": "Felipe Agurto Sepúlveda", "url": "https://github.com/FAgurtoS" },
-  "homepage": "https://github.com/FAgurtoS/term-latex",
-  "repository": "https://github.com/FAgurtoS/term-latex",
+  "name": "term-tex",
+  "version": "0.5.0",
+  "description": "Harness terminal LaTeX for Claude Code: draws the LaTeX in Claude's replies in the terminal, display math as real images (latex + dvipng, kitty graphics) and inline math as Unicode. Toggle with /math.",
+  "author": {
+    "name": "Felipe Agurto Sepúlveda",
+    "url": "https://github.com/FAgurtoS"
+  },
+  "homepage": "https://github.com/FAgurtoS/Term-TeX",
+  "repository": "https://github.com/FAgurtoS/Term-TeX",
   "license": "MIT",
-  "keywords": ["latex", "math", "equations", "terminal", "claude-code", "ghostty", "kitty", "physics"]
+  "keywords": [
+    "latex",
+    "tex",
+    "math",
+    "equations",
+    "terminal",
+    "harness",
+    "claude-code",
+    "claude",
+    "ghostty",
+    "kitty",
+    "physics"
+  ]
 }
