@@ -77,7 +77,7 @@ async function cacheDir($: any): Promise<string> {
 
 type Piece =
   | { kind: 'text'; text: string; code?: true }
-  | { kind: 'math'; tex: string; raw: string; inline?: true }
+  | { kind: 'math'; tex: string; raw: string }
 
 const GREEK: Record<string, string> = {
   alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', varepsilon: 'ε', zeta: 'ζ', eta: 'η',
@@ -252,6 +252,8 @@ function toUnicode(tex: string): string | null {
   return ok ? result.replace(/ {2,}/g, ' ').trim() : null
 }
 
+// A formula that Unicode cannot write is not kept inline: it becomes a display equation
+// (centered, with air around it), exactly as if it had been written with `$$`.
 // Inline `$...$` (pandoc rules: no space inside the delimiters, no digit right
 // after the closing one, so `$5 and $10` stays a price). Inline code is left alone.
 function inlineScan(chunk: string, push: (p: Piece) => void) {
@@ -267,7 +269,7 @@ function inlineScan(chunk: string, push: (p: Piece) => void) {
       } else {
         if (buf) push({ kind: 'text', text: buf })
         buf = ''
-        push({ kind: 'math', tex: m[1].trim(), raw: m[0], inline: true })
+        push({ kind: 'math', tex: m[1].trim(), raw: m[0] })
       }
       from = (m.index ?? 0) + m[0].length
     }
@@ -853,7 +855,7 @@ export const register: Register = (on) => {
       }
       out.push(
         img ? (
-          <Box key={`m${i}`} flexDirection="column" alignItems={p.inline ? 'flex-start' : 'center'} marginY={p.inline ? 0 : 1}>
+          <Box key={`m${i}`} flexDirection="column" alignItems="center" marginY={1}>
             <Image source={{ png: img.b64 }} columns={img.cols} rows={img.rows} alt={p.raw} />
           </Box>
         ) : (

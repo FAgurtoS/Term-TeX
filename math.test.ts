@@ -334,3 +334,20 @@ describe('the double-struck one', () => {
     expect(writes.find((w) => w.path.endsWith('.tex'))?.text).toContain('\\mathbf{1}')
   })
 })
+
+describe('formulas that need LaTeX are display equations', () => {
+  test('an inline matrix is centered with air around it, like a $$ block', async ($, on) => {
+    machine(on, { bare: ['latex', 'dvipng', 'kpsewhich', 'perl'], env: { HOME: '/home/f' } })
+    const inline = await mountText($, 'La rotación es $\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$ y ya.')
+    const display = await mountText($, 'La rotación es\n\n$$\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$$\n\ny ya.')
+    const box = (tree: unknown) => JSON.stringify(tree).match(/"alignItems":"center"[^}]*"marginY":1|"marginY":1[^}]*"alignItems":"center"/)
+    expect(box(await inline.drawn())).not.toBeNull()
+    expect(box(await display.drawn())).not.toBeNull()
+  })
+
+  test('a short formula stays in the line', async ($, on) => {
+    machine(on, { bare: ['latex', 'dvipng', 'kpsewhich', 'perl'], env: { HOME: '/home/f' } })
+    const ui = await mountText($, 'Con $E = mc^2$ y $|\\psi\\rangle$ seguimos.')
+    expect((await ui.find({ text: /E = mc²/ }))?.text).toContain('|ψ⟩ seguimos.')
+  })
+})

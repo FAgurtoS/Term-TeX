@@ -56,8 +56,9 @@ document renderer.
 - On by default. `/math on|off` toggles it and is remembered across sessions.
 - `/math color C` sets the ink colour. `/math ratio R` sets the cell shape by hand. `/math size N` sets how large equations are drawn (default 1.75, remembered); `/math debug` shows the last layout.
 - `/math copy [N]` copies the LaTeX of the last (or N-th last) equation drawn; `/math list` shows the last five. Selecting an equation with the mouse copies the terminal's picture cells, not the LaTeX.
-- Inline formulas Unicode cannot express (limits, nested powers, matrices) are
-  drawn as an image on their own line.
+- An inline formula that Unicode cannot express (a matrix, a big fraction, limits) is not
+  squeezed into the sentence: it is drawn as a display equation, centered, as if it had been
+  written with `$$`. What fits in Unicode stays in the line.
 - Prices such as `$5 and $10` and code (inline or fenced) are never touched.
 
 ## How it works and what it touches
