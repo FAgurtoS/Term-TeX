@@ -7,6 +7,12 @@ its tools and its terminal interface) that draws the LaTeX math in Claude's repl
 centered images in your terminal. Inline `$...$` becomes Unicode inside the sentence; display math
 (`$$...$$`, `\[...\]`) is compiled with LaTeX and drawn as a picture.
 
+![Term-TeX in Ghostty: the Lagrangian of N=4 super Yang-Mills, drawn as real equations, one of them boxed](assets/example-n4-sym.png)
+
+*Term-TeX in Ghostty on macOS. Claude wrote the reply in plain LaTeX (the Lagrangian of N=4 super
+Yang-Mills); the plugin draws the equations, including the boxed one, centered and scaled to the
+terminal's text. The sentences around them are the unchanged reply.*
+
 ## Works with Claude Code only
 - It is built on Claude Code's plugin hooks (it rewrites how an assistant message is drawn), so it
   does **not** work in other tools: not in Codex CLI, not in the claude.ai chat, not in a plain shell.
