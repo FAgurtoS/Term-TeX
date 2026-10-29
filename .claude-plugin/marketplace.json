@@ -1,0 +1,5 @@
+{
+  "name": "terminal-math",
+  "owner": { "name": "Felipe Agurto Sepúlveda" },
+  "plugins": [{ "name": "terminal-math", "source": "./" }]
+}

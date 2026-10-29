@@ -1,0 +1,10 @@
+{
+  "name": "terminal-math",
+  "version": "0.2.0",
+  "description": "Draws LaTeX math in assistant messages as real images in the terminal (latex + dvipng, kitty graphics), with inline formulas as Unicode. Toggle with /math.",
+  "author": { "name": "Felipe Agurto Sepúlveda", "url": "https://github.com/FAgurtoS" },
+  "homepage": "https://github.com/FAgurtoS/claude-terminal-math",
+  "repository": "https://github.com/FAgurtoS/claude-terminal-math",
+  "license": "MIT",
+  "keywords": ["latex", "math", "equations", "terminal", "ghostty", "kitty"]
+}
