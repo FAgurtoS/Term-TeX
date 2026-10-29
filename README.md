@@ -5,19 +5,32 @@ images in the terminal. Inline `$...$` becomes Unicode inside the sentence;
 display math (`$$...$$`, `\[...\]`) is compiled with LaTeX and drawn as a picture.
 
 ## Requirements
-- **Terminal with the kitty graphics protocol**: Ghostty or kitty. Elsewhere the
-  equations stay as readable text.
-- **TeX**: MacTeX or TeX Live, providing `latex`, `dvipng` and the packages
-  `standalone`, `amsmath`, `xcolor`. macOS paths are expected at
-  `/Library/TeX/texbin`. If something is missing, a toast says so once.
-- **perl** (ships with macOS) to measure the terminal's cell size.
-- Optional LaTeX packages are loaded when installed (a full MacTeX has them all):
+- **A terminal with the kitty graphics protocol.** Ghostty, kitty or WezTerm. Elsewhere the
+  equations stay as readable text (inline formulas still become Unicode).
+- **TeX** providing `latex`, `dvipng` and the packages `standalone`, `amsmath`, `xcolor`.
+  If something is missing, a toast says so once.
+- **perl** (optional, found automatically) pads each equation to the terminal's cell grid and
+  measures the terminal. Without it equations are drawn at their natural size, slightly less exact.
+- Optional LaTeX packages are loaded per equation when installed (a full TeX has them all):
   mathtools, bm, mathrsfs, cancel, physics, siunitx, tensor, upgreek, esint, stmaryrd,
   dsfont, mhchem, cases, units, nicefrac, xfrac, accents, extarrows, yhmath, mathdots, slashed.
 
+## Platforms
+| | TeX is looked for | perl | cache |
+|---|---|---|---|
+| **macOS** (tested) | PATH, `/Library/TeX/texbin`, Homebrew | `/usr/bin/perl` | `~/.cache/claude-terminal-math` |
+| **Linux** (not yet tested on a real machine) | PATH, `/usr/bin`, `/usr/local/texlive/<year>/bin/<arch>` | system perl | `$XDG_CACHE_HOME` or `~/.cache` |
+| **Windows** (best effort, untested) | PATH, MiKTeX, `C:/texlive/<year>/bin/windows` | TeX Live's or Git's perl, if any | `%LOCALAPPDATA%` |
+
+- Linux packages (Debian/Ubuntu): `texlive-latex-extra texlive-science dvipng perl`.
+- Windows: the graphics protocol needs WezTerm (Windows Terminal does not draw kitty images).
+  With MiKTeX, allow it to install missing packages on the fly, or a first run may stall.
+- If the cell shape is measured wrong (no perl, an odd terminal): `/math ratio 0.46`
+  sets the width/height ratio of one cell by hand; `/math ratio auto` measures again.
+
 ## Use
 - On by default. `/math on|off` toggles it and is remembered across sessions.
-- `/math size N` sets how large equations are drawn (default 1.75, remembered); `/math debug` shows the last layout.
+- `/math ratio R` sets the cell shape by hand. `/math size N` sets how large equations are drawn (default 1.75, remembered); `/math debug` shows the last layout.
 - `/math copy [N]` copies the LaTeX of the last (or N-th last) equation drawn; `/math list` shows the last five. Selecting an equation with the mouse copies the terminal's picture cells, not the LaTeX.
 - Inline formulas Unicode cannot express (limits, nested powers, matrices) are
   drawn as an image on their own line.

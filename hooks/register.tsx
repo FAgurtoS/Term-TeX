@@ -1,8 +1,74 @@
 import type { Register } from 'claude-code'
 
-const LATEX = '/Library/TeX/texbin/latex'
-const DVIPNG = '/Library/TeX/texbin/dvipng'
 const DPI = 450
+
+type Platform = 'mac' | 'linux' | 'win'
+
+// Where things live on this machine; found once when a session starts.
+let platform: Platform = 'mac'
+let latexBin = 'latex'
+let dvipngBin = 'dvipng'
+let kpsewhichBin: string | null = 'kpsewhich'
+let perlBin: string | null = null
+
+const TEX_YEARS = ['2030', '2029', '2028', '2027', '2026', '2025', '2024', '2023', '2022']
+
+// Places a TeX tool may be, best first: on PATH, then the usual install spots.
+function toolCandidates(name: string, plat: Platform, home: string, local: string): string[] {
+  const out = [name]
+  if (plat === 'mac') {
+    out.push(`/Library/TeX/texbin/${name}`, `/opt/homebrew/bin/${name}`, `/usr/local/bin/${name}`)
+  } else if (plat === 'linux') {
+    out.push(`/usr/bin/${name}`, `/usr/local/bin/${name}`, `${home}/.local/bin/${name}`)
+    for (const y of TEX_YEARS) {
+      for (const arch of ['x86_64-linux', 'aarch64-linux']) {
+        out.push(`/usr/local/texlive/${y}/bin/${arch}/${name}`, `${home}/texlive/${y}/bin/${arch}/${name}`)
+      }
+    }
+  } else {
+    out.push(`${local}/Programs/MiKTeX/miktex/bin/x64/${name}.exe`, `C:/Program Files/MiKTeX/miktex/bin/x64/${name}.exe`)
+    for (const y of TEX_YEARS) out.push(`C:/texlive/${y}/bin/windows/${name}.exe`, `C:/texlive/${y}/bin/win64/${name}.exe`)
+  }
+  return out
+}
+
+// perl is optional (it pads pictures and measures the terminal); TeX Live for
+// Windows ships one, and so does Git for Windows.
+function perlCandidates(plat: Platform): string[] {
+  if (plat === 'win') {
+    return ['perl', 'C:/Program Files/Git/usr/bin/perl.exe', ...TEX_YEARS.map((y) => `C:/texlive/${y}/tlpkg/tlperl/bin/perl.exe`)]
+  }
+  return ['perl', '/usr/bin/perl', '/usr/local/bin/perl', '/opt/homebrew/bin/perl']
+}
+
+// The first candidate that runs (a bare name goes through PATH) or exists (a full path).
+async function firstThatWorks($: any, candidates: string[]): Promise<string | null> {
+  for (const c of candidates) {
+    if (/[\\/]/.test(c)) {
+      if (await $.fs.exists(c)) return c
+    } else {
+      const r = await $.process.run([c, '--version'], { timeoutMs: 8000 }).catch(() => null)
+      if (r && r.exitCode === 0) return c
+    }
+  }
+  return null
+}
+
+async function detectPlatform($: any): Promise<Platform> {
+  if ((await $.env.get('OS')) === 'Windows_NT') return 'win'
+  return (await $.fs.exists('/System/Library/CoreServices')) ? 'mac' : 'linux'
+}
+
+// Where renders are kept: ~/.cache (or $XDG_CACHE_HOME) on macOS and Linux, %LOCALAPPDATA% on Windows.
+async function cacheDir($: any): Promise<string> {
+  if (platform === 'win') {
+    const base = (await $.env.get('LOCALAPPDATA')) ?? (await $.env.get('USERPROFILE')) ?? 'C:/Temp'
+    return `${String(base).replaceAll('\\', '/')}/claude-terminal-math`
+  }
+  const xdg = await $.env.get('XDG_CACHE_HOME')
+  if (xdg) return `${xdg}/claude-terminal-math`
+  return `${(await $.env.get('HOME')) ?? ''}/.cache/claude-terminal-math`
+}
 
 type Piece =
   | { kind: 'text'; text: string; code?: true }
@@ -297,9 +363,10 @@ for my $y (0 .. $h - 1) { for my $x (0 .. $w - 1) {
 my $new = join '', map { "\0" . pack('C*', @$_) } @rows;
 my $z = compress($new);
 sub chunk { my ($t, $b) = @_; pack('N', length $b) . $t . $b . pack('N', crc32($t . $b)) }
-open(my $o, '>:raw', $out) or die;
+open(my $o, '>:raw', "$out.part") or die;
 print $o "\x89PNG\r\n\x1a\n", chunk('IHDR', pack('NNCCCCC', $w, $h, 8, 6, 0, 0, 0)), chunk('IDAT', $z), chunk('IEND', '');
-close $o;`
+close $o;
+rename("$out.part", $out) or die "rename: $!";`
 
 const FORBIDDEN = /\\(input|include|openin|openout|read|readline|write|immediate|special|usepackage|documentclass|catcode|csname|InputIfFileExists|verbatiminput|lstinputlisting)(?![a-zA-Z])/
 
@@ -363,6 +430,23 @@ function neededPkgs(tex: string, available: string[]): string[] {
 // of them doing that at once break each other; so they take turns (each is ~0.1 s).
 let dvipngTurn: Promise<unknown> = Promise.resolve()
 
+// Without perl the picture cannot be padded to the cell grid, so it is drawn at
+// whole cells near its natural size, choosing the pair that keeps its proportions.
+function fit(wPt: number, hPt: number, c0: number, ratio: number): [number, number] {
+  const aspect = hPt / wPt
+  let best: [number, number] = [Math.max(1, c0), Math.max(1, Math.round(c0 * aspect * ratio))]
+  let bestErr = Infinity
+  for (let c = Math.max(1, c0 - 3); c <= Math.min(255, c0 + 3); c++) {
+    const r = Math.min(255, Math.max(1, Math.round(c * aspect * ratio)))
+    const err = Math.abs(Math.log(r / (c * ratio) / aspect)) + (0.5 * Math.abs(c - c0)) / c0
+    if (err < bestErr) {
+      bestErr = err
+      best = [c, r]
+    }
+  }
+  return best
+}
+
 // Equations being compiled right now, so one equation twice in a message is built once.
 const inflight = new Map<string, Promise<Img | null>>()
 
@@ -374,7 +458,7 @@ async function render($: any, tex: string, color: string, sc: number, ratio: num
   if (FORBIDDEN.test(tex)) return null
   const cw = 7 / sc // TeX points per terminal column
   const ch = 7 / ratio / sc // and per terminal row
-  const key = hash(`${DPI}|${color}|${cw.toFixed(3)}|${ch.toFixed(3)}|${pkgs.length}|${tex}`)
+  const key = hash(`${DPI}|${perlBin ? 'grid' : 'tight'}|${color}|${cw.toFixed(3)}|${ch.toFixed(3)}|${pkgs.length}|${tex}`)
   if (cache.has(key)) return cache.get(key) ?? null
   const running = inflight.get(key)
   if (running) return running
@@ -388,9 +472,10 @@ async function render($: any, tex: string, color: string, sc: number, ratio: num
 }
 
 async function compile($: any, tex: string, color: string, cw: number, ch: number, key: string): Promise<Img | null> {
-  const home = (await $.env.get('HOME')) ?? ''
-  const dir = `${home}/.cache/claude-terminal-math`
+  const dir = await cacheDir($)
   const png = `${dir}/${key}.png`
+  const grid = perlBin !== null // pad to the cell grid (needs perl), else a tight picture
+  const ratio = cw / ch
   try {
     if (!(await $.fs.exists(png))) {
       // With every optional package, then, if that fails, with the basic ones.
@@ -400,28 +485,32 @@ async function compile($: any, tex: string, color: string, cw: number, ch: numbe
         await $.fs.write(
           `${dir}/${key}.tex`,
           [
-            '\\documentclass[border=0pt]{standalone}',
+            grid ? '\\documentclass[border=0pt]{standalone}' : '\\documentclass[border=2pt]{standalone}',
             '\\usepackage{amsmath,amssymb,xcolor}',
             extra.length ? `\\usepackage{${extra.join(',')}}` : '',
             `\\definecolor{fg}{HTML}{${color}}`,
-            '\\newsavebox{\\eqbox}',
-            `\\newdimen\\cellw \\cellw=${cw.toFixed(4)}pt`,
-            `\\newdimen\\cellh \\cellh=${ch.toFixed(4)}pt`,
-            '\\def\\cornermark{{\\color{white}\\rule{0.3pt}{0.3pt}}}',
-            '\\begin{document}',
-            `\\sbox{\\eqbox}{\\color{fg}$\\displaystyle ${tex}$}`,
-            '\\dimen0=\\wd\\eqbox \\advance\\dimen0 by 6pt',
-            '\\dimen1=\\ht\\eqbox \\advance\\dimen1 by \\dp\\eqbox \\advance\\dimen1 by 4pt',
-            '\\count1=\\numexpr(\\number\\dimen0+\\number\\cellw/2-1)/\\number\\cellw\\relax',
-            '\\count2=\\numexpr(\\number\\dimen1+\\number\\cellh/2-1)/\\number\\cellh\\relax',
-            '\\dimen2=\\count1\\cellw \\dimen3=\\count2\\cellh',
-            '\\vbox to \\dimen3{\\hbox to \\dimen2{\\cornermark\\hss\\cornermark}\\vss\\hbox to \\dimen2{\\hss\\usebox{\\eqbox}\\hss}\\vss\\hbox to \\dimen2{\\cornermark\\hss\\cornermark}}',
+            ...(grid
+              ? [
+                  '\\newsavebox{\\eqbox}',
+                  `\\newdimen\\cellw \\cellw=${cw.toFixed(4)}pt`,
+                  `\\newdimen\\cellh \\cellh=${ch.toFixed(4)}pt`,
+                  '\\def\\cornermark{{\\color{white}\\rule{0.3pt}{0.3pt}}}',
+                  '\\begin{document}',
+                  `\\sbox{\\eqbox}{\\color{fg}$\\displaystyle ${tex}$}`,
+                  '\\dimen0=\\wd\\eqbox \\advance\\dimen0 by 6pt',
+                  '\\dimen1=\\ht\\eqbox \\advance\\dimen1 by \\dp\\eqbox \\advance\\dimen1 by 4pt',
+                  '\\count1=\\numexpr(\\number\\dimen0+\\number\\cellw/2-1)/\\number\\cellw\\relax',
+                  '\\count2=\\numexpr(\\number\\dimen1+\\number\\cellh/2-1)/\\number\\cellh\\relax',
+                  '\\dimen2=\\count1\\cellw \\dimen3=\\count2\\cellh',
+                  '\\vbox to \\dimen3{\\hbox to \\dimen2{\\cornermark\\hss\\cornermark}\\vss\\hbox to \\dimen2{\\hss\\usebox{\\eqbox}\\hss}\\vss\\hbox to \\dimen2{\\cornermark\\hss\\cornermark}}',
+                ]
+              : ['\\begin{document}', `\\color{fg}$\\displaystyle ${tex}$`]),
             '\\end{document}',
             '',
           ].join('\n'),
         )
         const l = await $.process.run(
-          [LATEX, '-no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', `${key}.tex`],
+          [latexBin, '-no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', `${key}.tex`],
           { cwd: dir, timeoutMs: 20000, env: { openin_any: 'p', openout_any: 'p' } },
         )
         if (l.exitCode === 0) {
@@ -434,7 +523,7 @@ async function compile($: any, tex: string, color: string, cw: number, ch: numbe
       }
       const runDvipng = () =>
         $.process.run(
-          [DVIPNG, '-T', 'tight', '-bg', 'Transparent', '-D', String(DPI), '-o', `${key}.raw.png`, `${key}.dvi`],
+          [dvipngBin, '-T', 'tight', '-bg', 'Transparent', '-D', String(DPI), '-o', grid ? `${key}.raw.png` : `${key}.png`, `${key}.dvi`],
           { cwd: dir, timeoutMs: 30000 },
         )
       let d: any
@@ -445,17 +534,25 @@ async function compile($: any, tex: string, color: string, cw: number, ch: numbe
         if (d.exitCode === 0) break
       }
       if (d.exitCode !== 0) throw new Error(`dvipng failed: ${String(d.stderr).slice(0, 120)}`)
-      // The finished picture appears all at once, never half written.
-      const c = await $.process.run(['/usr/bin/perl', '-e', CLEAR_CORNERS, `${key}.raw.png`, `${key}.part.png`], { cwd: dir, timeoutMs: 20000 })
-      if (c.exitCode !== 0) throw new Error('corner cleanup failed')
-      const m = await $.process.run(['/bin/mv', '-f', `${dir}/${key}.part.png`, png])
-      if (m.exitCode !== 0) throw new Error('could not place the picture')
+      // The finished picture appears all at once, never half written (perl renames it).
+      if (grid) {
+        const c = await $.process.run([perlBin, '-e', CLEAR_CORNERS, `${key}.raw.png`, png], { cwd: dir, timeoutMs: 20000 })
+        if (c.exitCode !== 0) throw new Error(`corner cleanup failed: ${String(c.stderr).slice(0, 100)}`)
+      }
     }
     const { base64 } = await $.fs.read(png, { as: 'bytes' })
     const bytes = Uint8Array.fromBase64(base64)
     const view = new DataView(bytes.buffer, bytes.byteOffset)
     const toCells = (px: number, cell: number) => Math.min(255, Math.max(1, Math.round((px * 72.27) / DPI / cell)))
-    const img = { b64: base64, cols: toCells(view.getUint32(16), cw), rows: toCells(view.getUint32(20), ch) }
+    const wPx = view.getUint32(16)
+    const hPx = view.getUint32(20)
+    let cols = toCells(wPx, cw)
+    let rows = toCells(hPx, ch)
+    if (!grid) {
+      // A tight picture: fit it to whole cells without distorting it.
+      ;[cols, rows] = fit((wPx * 72.27) / DPI, (hPx * 72.27) / DPI, cols, ratio)
+    }
+    const img = { b64: base64, cols, rows }
     cache.set(key, img)
     return img
   } catch (err) {
@@ -474,13 +571,14 @@ let cellRatio = 0.5
 // Finds the tty of the process tree we run under and asks it for its size in
 // cells and pixels (TIOCGWINSZ). perl, since macOS's python3 is a stub.
 const MEASURE = [
+  'exit if $^O eq "MSWin32";',
   'my $pid = getppid();',
   'for (1..10) {',
   '  my $t = `ps -o tty= -p $pid`; $t =~ s/\\s+//g;',
-  "  if ($t ne '' && $t ne '??') {",
+  "  if ($t ne '' && $t ne '??' && $t ne '?') {",
   '    open(my $f, "<", "/dev/$t") or last;',
   '    my $b = "\\0" x 8;',
-  '    ioctl($f, 0x40087468, $b) or last;',
+  '    ioctl($f, $^O eq "darwin" ? 0x40087468 : 0x5413, $b) or last;',
   '    print join(" ", unpack("S4", $b)), "\\n";',
   '    last;',
   '  }',
@@ -492,7 +590,8 @@ const MEASURE = [
 // The terminal's cell width over its cell height; null when it does not report pixels.
 async function measureCell($: any): Promise<number | null> {
   try {
-    const r = await $.process.run(['/usr/bin/perl', '-e', MEASURE], { timeoutMs: 5000 })
+    if (!perlBin) return null
+    const r = await $.process.run([perlBin, '-e', MEASURE], { timeoutMs: 5000 })
     const [rows, cols, xpix, ypix] = String(r.stdout).trim().split(/\s+/).map(Number)
     if (!rows || !cols || !xpix || !ypix) return null
     const ratio = xpix / cols / (ypix / rows)
@@ -509,17 +608,27 @@ const OPTIONAL = [
   'yhmath', 'mathdots', 'slashed',
 ]
 
-// Names what is missing from the TeX install, and which optional packages it has.
+// Finds the TeX tools (and perl) on this machine, names what is missing, and says
+// which optional packages are installed.
 async function scanTeX($: any): Promise<{ missing: string[]; pkgs: string[] }> {
+  platform = await detectPlatform($)
+  const home = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')) ?? ''
+  const local = String((await $.env.get('LOCALAPPDATA')) ?? '').replaceAll('\\', '/')
   const missing: string[] = []
-  if (!(await $.fs.exists(LATEX))) missing.push('latex')
-  if (!(await $.fs.exists(DVIPNG))) missing.push('dvipng')
+  const latex = await firstThatWorks($, toolCandidates('latex', platform, home, local))
+  const dvipng = await firstThatWorks($, toolCandidates('dvipng', platform, home, local))
+  if (latex) latexBin = latex
+  else missing.push('latex')
+  if (dvipng) dvipngBin = dvipng
+  else missing.push('dvipng')
+  perlBin = await firstThatWorks($, perlCandidates(platform))
+  kpsewhichBin = await firstThatWorks($, toolCandidates('kpsewhich', platform, home, local))
   let found: string[] = []
-  if (missing.length === 0) {
+  if (missing.length === 0 && kpsewhichBin) {
     const k = await $.process
-      .run(['/Library/TeX/texbin/kpsewhich', ...[...REQUIRED, ...OPTIONAL].map((n) => `${n}.sty`)], { timeoutMs: 10000 })
+      .run([kpsewhichBin, ...[...REQUIRED, ...OPTIONAL].map((n) => `${n}.sty`)], { timeoutMs: 10000 })
       .catch(() => null)
-    found = String(k?.stdout ?? '').split('\n').map((l: string) => l.trim().split('/').pop() ?? '')
+    found = String(k?.stdout ?? '').split('\n').map((l: string) => l.trim().split(/[\\/]/).pop() ?? '')
     for (const pkg of REQUIRED) if (!found.includes(`${pkg}.sty`)) missing.push(`${pkg}.sty`)
   }
   return { missing, pkgs: OPTIONAL.filter((n) => found.includes(`${n}.sty`)) }
@@ -530,25 +639,31 @@ export const register: Register = (on) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'math',
-      description: 'LaTeX math as images: /math on | off | size N | copy [N] | list | reset | debug',
+      description: 'LaTeX math as images: /math on | off | size N | ratio R | copy [N] | list | reset | debug',
     })
     enabled = (await $.store.get('enabled')) !== false
     const saved = Number(await $.store.get('scale'))
     if (saved >= 0.5 && saved <= 5) scale = saved
     $.ui.status(enabled ? '∑ math' : undefined)
-    const home = (await $.env.get('HOME')) ?? ''
-    // Old renders are dropped when a session opens; nothing has to run at close.
-    await $.process
-      .run(['find', `${home}/.cache/claude-terminal-math`, '-type', 'f', '-mtime', '+30', '-delete'])
-      .catch(() => undefined)
-    cellRatio = (await measureCell($)) ?? 0.5
     // A missing TeX install is reported once, and again only if what is missing changes.
     const tex = await scanTeX($)
     pkgs = tex.pkgs
+    const dir = await cacheDir($)
+    // Old renders are dropped when a session opens; nothing has to run at close.
+    if (perlBin) {
+      const sweep = 'opendir(my $d,$ARGV[0]) or exit; for (readdir $d) { my $f="$ARGV[0]/$_"; unlink $f if -f $f && -M $f > 30 }'
+      await $.process.run([perlBin, '-e', sweep, dir]).catch(() => undefined)
+    } else if (platform !== 'win') {
+      await $.process.run(['find', dir, '-type', 'f', '-mtime', '+30', '-delete']).catch(() => undefined)
+    }
+    const manual = Number(await $.store.get('ratio'))
+    cellRatio = manual > 0.3 && manual < 0.8 ? manual : ((await measureCell($)) ?? 0.5)
     const missing = tex.missing.join(', ')
     const warned = await $.store.get('depsWarned')
     if (missing && warned !== missing) {
-      $.ui.toast(`terminal-math: missing ${missing}; equations stay as text. Install MacTeX/TeX Live.`)
+      const hint =
+        platform === 'mac' ? 'Install MacTeX.' : platform === 'linux' ? 'Install TeX Live (texlive-latex-extra, dvipng).' : 'Install MiKTeX or TeX Live.'
+      $.ui.toast(`terminal-math: missing ${missing}; equations stay as text. ${hint}`)
       await $.store.set('depsWarned', missing)
     } else if (!missing && warned) {
       await $.store.delete('depsWarned')
@@ -558,6 +673,21 @@ export const register: Register = (on) => {
 
   on('command.run', { command: 'math' }, async ($, e) => {
     const [a = '', n = ''] = e.args.trim().split(/\s+/)
+    if (a === 'ratio') {
+      if (n === 'auto') {
+        await $.store.delete('ratio')
+        return { text: 'cell ratio is measured again at the next session start' }
+      }
+      const v = Number(n.replace(',', '.'))
+      if (!(v > 0.3 && v < 0.8)) {
+        return { text: `cell ratio (width/height) is ${cellRatio.toFixed(3)}; /math ratio 0.46 sets it, /math ratio auto measures it` }
+      }
+      cellRatio = v
+      await $.store.set('ratio', v)
+      cache.clear()
+      $.ui.invalidate('ui.render')
+      return { text: `cell ratio ${v} (remembered)` }
+    }
     if (a === 'reset') {
       cache.clear()
       $.ui.invalidate('ui.render')
