@@ -95,15 +95,18 @@ const SYMBOLS: Record<string, string> = {
   ldots: '…', cdots: '⋯', dots: '…', hbar: 'ℏ', ell: 'ℓ', propto: '∝', sim: '∼', equiv: '≡',
   langle: '⟨', rangle: '⟩', dagger: '†', circ: '∘', degree: '°', emptyset: '∅', neg: '¬',
   land: '∧', lor: '∨', wedge: '∧', vee: '∨', oplus: '⊕', otimes: '⊗', perp: '⊥', parallel: '∥',
-  mid: '|', ll: '≪', gg: '≫', angle: '∠', prime: '′', star: '⋆', ast: '∗', div: '÷',
+  mid: ' | ', ll: '≪', gg: '≫', angle: '∠', prime: '′', star: '⋆', ast: '∗', div: '÷',
   Box: '□', square: '□', blacksquare: '■', triangle: '△', bullet: '•', therefore: '∴', because: '∵',
   varnothing: '∅', setminus: '∖', lesssim: '≲', gtrsim: '≳', simeq: '≃', cong: '≅', doteq: '≐',
   rightleftharpoons: '⇌', uparrow: '↑', downarrow: '↓', Uparrow: '⇑', Downarrow: '⇓', longrightarrow: '⟶',
   longleftarrow: '⟵', Longrightarrow: '⟹', Longleftarrow: '⟸', hookrightarrow: '↪', lfloor: '⌊',
   rfloor: '⌋', lceil: '⌈', rceil: '⌉', sqcup: '⊔', sqcap: '⊓', bigcup: '⋃', bigcap: '⋂', nmid: '∤',
+  wp: '℘', imath: 'ı', jmath: 'ȷ', odot: '⊙', ddagger: '‡', nexists: '∄', iint: '∬', iiint: '∭',
+  oiint: '∯', oiiint: '∰', bigoplus: '⨁', bigotimes: '⨂', bigvee: '⋁', bigwedge: '⋀', coprod: '∐',
+  lVert: '‖', rVert: '‖', vert: '|', Vert: '‖',
   lbrace: '{', rbrace: '}', lvert: '|', rvert: '|', Re: 'ℜ', Im: 'ℑ', aleph: 'ℵ',
 }
-const FUNCS = ['sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'sinh', 'cosh', 'tanh', 'log', 'ln', 'exp', 'det', 'max', 'min', 'lim', 'sup', 'inf', 'arg', 'dim', 'ker', 'Tr', 'tr']
+const FUNCS = ['sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'sinh', 'cosh', 'tanh', 'log', 'ln', 'exp', 'det', 'max', 'min', 'lim', 'sup', 'inf', 'arg', 'dim', 'ker', 'Tr', 'tr', 'gcd', 'Pr', 'deg', 'arcsin', 'arccos', 'arctan', 'hom', 'lg', 'sgn']
 const SUP: Record<string, string> = {
   '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
   '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾', a: 'ᵃ', b: 'ᵇ', c: 'ᶜ', d: 'ᵈ', e: 'ᵉ', f: 'ᶠ',
@@ -118,9 +121,29 @@ const SUB: Record<string, string> = {
   '+': '₊', '-': '₋', '=': '₌', '(': '₍', ')': '₎', a: 'ₐ', e: 'ₑ', h: 'ₕ', i: 'ᵢ', j: 'ⱼ', k: 'ₖ',
   l: 'ₗ', m: 'ₘ', n: 'ₙ', o: 'ₒ', p: 'ₚ', r: 'ᵣ', s: 'ₛ', t: 'ₜ', u: 'ᵤ', v: 'ᵥ', x: 'ₓ', β: 'ᵦ', γ: 'ᵧ', ρ: 'ᵨ', φ: 'ᵩ', χ: 'ᵪ',
 }
-const CAL: Record<string, string> = { L: 'ℒ', H: 'ℋ', F: 'ℱ', B: 'ℬ', E: 'ℰ', I: 'ℐ', M: 'ℳ', R: 'ℛ' }
-const BB: Record<string, string> = { '1': '𝟙', R: 'ℝ', C: 'ℂ', N: 'ℕ', Z: 'ℤ', Q: 'ℚ', H: 'ℍ', P: 'ℙ' }
-const ACCENT: Record<string, string> = { slashed: '\u0338', vec: '⃗', hat: '̂', bar: '̄', overline: '̄', tilde: '̃', dot: '̇', ddot: '̈' }
+const CAL_UP = Array.from('𝒜ℬ𝒞𝒟ℰℱ𝒢ℋℐ𝒥𝒦ℒℳ𝒩𝒪𝒫𝒬ℛ𝒮𝒯𝒰𝒱𝒲𝒳𝒴𝒵')
+const BB_UP = Array.from('𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ')
+const FRAK_UP = Array.from('𝔄𝔅ℭ𝔇𝔈𝔉𝔊ℌℑ𝔍𝔎𝔏𝔐𝔑𝔒𝔓𝔔ℜ𝔖𝔗𝔘𝔙𝔚𝔛𝔜ℨ')
+const FRAK_LOW = Array.from('𝔞𝔟𝔠𝔡𝔢𝔣𝔤𝔥𝔦𝔧𝔨𝔩𝔪𝔫𝔬𝔭𝔮𝔯𝔰𝔱𝔲𝔳𝔴𝔵𝔶𝔷')
+
+// Letters of `a` in another alphabet (A-Z from `up`, a-z from `low` or left as they are); null for anything else.
+function alphabet(a: string, up: string[], low?: string[]): string | null {
+  let out = ''
+  for (const ch of a) {
+    if (/[A-Z]/.test(ch)) out += up[ch.charCodeAt(0) - 65]
+    else if (/[a-z]/.test(ch)) out += low ? low[ch.charCodeAt(0) - 97] : ch
+    else if (/[0-9]/.test(ch)) out += ch === '1' && up === BB_UP ? '𝟙' : ch
+    else return null
+  }
+  return out
+}
+// Old font switches (`{\\rm eff}`), style and size commands: they print nothing in plain text.
+const DROP = new Set([
+  'rm', 'it', 'bf', 'sf', 'tt', 'normalfont', 'mit', 'displaystyle', 'textstyle', 'scriptstyle',
+  'scriptscriptstyle', 'limits', 'nolimits', 'nonumber', 'notag',
+  'big', 'Big', 'bigg', 'Bigg', 'bigl', 'bigr', 'Bigl', 'Bigr', 'biggl', 'biggr', 'Biggl', 'Biggr',
+])
+const ACCENT: Record<string, string> = { widehat: '\u0302', widetilde: '\u0303', check: '\u030C', breve: '\u0306', acute: '\u0301', grave: '\u0300', mathring: '\u030A', slashed: '\u0338', vec: '⃗', hat: '̂', bar: '̄', overline: '̄', tilde: '̃', dot: '̇', ddot: '̈' }
 const WORD = /^[\p{L}\p{N}\p{M}.]+$/u
 
 // Converts the LaTeX of an inline formula to plain Unicode, or null when it
@@ -139,7 +162,12 @@ function toUnicode(tex: string): string | null {
     let out = ''
     for (const ch of arg) {
       const m = table[ch]
-      if (m === undefined) return (up ? '^' : '\\_') + (WORD.test(arg) || [...arg].length === 1 ? arg : `(${arg})`)
+      if (m === undefined) {
+        // `T^μν` (all Greek indices) reads fine bare; `e^(iπ)` needs its brackets
+        // (a subscript label such as `λ_eff` or `f_RR` has no such ambiguity)
+        const bare = [...arg].length === 1 || (up ? /^[\p{Script=Greek}\d]+$/u : /^[\p{L}\p{N}]+$/u).test(arg)
+        return (up ? '^' : '\\_') + (bare ? arg : `(${arg})`)
+      }
       out += m
     }
     return out
@@ -178,6 +206,15 @@ function toUnicode(tex: string): string | null {
     }
     if (SYMBOLS[name]) return SYMBOLS[name]
     if (FUNCS.includes(name)) return /[a-zA-Z\\]/.test(tex[i] ?? '') ? name + ' ' : name
+    if (DROP.has(name)) {
+      while (tex[i] === ' ') i++
+      return ''
+    }
+    if (name === 'overline' || name === 'underline') {
+      // a line over (or under) every letter reads as one continuous line
+      const mark = name === 'overline' ? '\u0305' : '\u0332'
+      return [...arg()].map((ch) => ch + mark).join('')
+    }
     if (ACCENT[name]) {
       const base = arg()
       return [...base].length === 1 ? base + ACCENT[name] : fail()
@@ -185,26 +222,58 @@ function toUnicode(tex: string): string | null {
     switch (name) {
       case 'frac':
       case 'dfrac':
-      case 'tfrac': {
+      case 'tfrac':
+      case 'cfrac': {
         const n = arg()
         const d = arg()
         return n.length + d.length > 24 ? fail() : `${group(n)}/${group(d)}`
       }
       case 'sqrt': {
-        if (tex[i] === '[') return fail()
+        // \sqrt[3]{x} is ∛x, \sqrt[4]{x} is ∜x, another index goes in front as a superscript
+        if (tex[i] === '[') {
+          const end = tex.indexOf(']', i)
+          if (end < 0) return fail()
+          const n = tex.slice(i + 1, end).trim()
+          i = end + 1
+          const root = n === '3' ? '∛' : n === '4' ? '∜' : (script(n, SUP, true).startsWith('^') ? '' : script(n, SUP, true)) + '√'
+          return n !== '3' && n !== '4' && root === '√' ? fail() : root + group(arg())
+        }
         return '√' + group(arg())
       }
+      case 'binom': case 'dbinom': case 'tbinom': {
+        const n = arg()
+        const k = arg()
+        return `C(${n},${k})`
+      }
+      case 'bmod': return ' mod '
+      case 'pmod': return ` (mod ${arg()})`
+      case 'over': return '\u0001' // {a \over b}: closed by the group that holds it
+      case 'phantom': case 'hphantom': case 'vphantom':
+        arg()
+        return ' '
+      case 'hspace': case 'hspace*':
+        arg()
+        return ' '
+      case 'mathstrut': return ''
       case 'text': case 'mathrm': case 'textrm': case 'mathit': case 'operatorname':
       case 'mathbf': case 'boldsymbol': case 'bm': case 'mathsf': case 'textbf':
+      case 'mathtt': case 'texttt': case 'textit': case 'textsf': case 'mbox': case 'hbox': case 'mathnormal':
         return arg()
-      case 'mathcal': {
-        const a = arg()
-        return CAL[a] ?? (/^[A-Za-z]$/.test(a) ? a : fail())
+      case 'mathcal': case 'mathscr': case 'cal': {
+        const r = alphabet(arg(), CAL_UP)
+        return r ?? fail()
       }
       case 'mathbb': {
-        const a = arg()
-        return BB[a] ?? (/^[A-Za-z]$/.test(a) ? a : fail())
+        const r = alphabet(arg(), BB_UP)
+        return r ?? fail()
       }
+      case 'mathfrak': {
+        const r = alphabet(arg(), FRAK_UP, FRAK_LOW)
+        return r ?? fail()
+      }
+      case 'label':
+        arg()
+        return ''
       case 'left': case 'right':
         if (tex[i] === '.') i++
         return ''
@@ -227,7 +296,7 @@ function toUnicode(tex: string): string | null {
       if (tex[i] !== '}') return fail()
       i++
     } else if (c === '^' || c === '_') {
-      return fail()
+      base = '' // a leading script, as in ^{235}U
     } else {
       i++
       base = c === "'" ? '′' : c === '~' ? ' ' : c === '*' ? '∗' : c
@@ -243,8 +312,13 @@ function toUnicode(tex: string): string | null {
   function seq(inGroup: boolean): string {
     let out = ''
     while (i < tex.length && ok) {
-      if (tex[i] === '}') return inGroup ? out : fail()
+      if (tex[i] === '}') break
       out += atom()
+    }
+    if (tex[i] === '}' && !inGroup) return fail()
+    if (out.includes('\u0001')) {
+      const [num, den] = out.split('\u0001')
+      out = `${group(num.trim())}/${group(den.trim())}`
     }
     return out
   }

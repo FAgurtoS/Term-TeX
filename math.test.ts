@@ -351,3 +351,53 @@ describe('formulas that need LaTeX are display equations', () => {
     expect((await ui.find({ text: /E = mc²/ }))?.text).toContain('|ψ⟩ seguimos.')
   })
 })
+
+describe('old-style LaTeX still reads as text', () => {
+  test('{\\rm eff} in a superscript stays in the line', async ($, on) => {
+    machine(on, { bare: ['latex', 'dvipng', 'kpsewhich', 'perl'], env: { HOME: '/home/f' } })
+    const ui = await mountText($, 'El potencial $V^{\\rm eff}$ cumple $dV^{\\rm eff}/dR = \\frac{1}{3}(\\kappa T + 2f - R f_R)$ siempre.')
+    const t = (await ui.find({ text: /Vᵉᶠᶠ/ }))?.text ?? ''
+    expect(t).toContain('El potencial Vᵉᶠᶠ cumple dVᵉᶠᶠ/dR = 1/3(κT + 2f - R f')
+    expect(t).toContain('siempre.')
+  })
+
+  test('size commands and \\bf do not send a formula to LaTeX', async ($, on) => {
+    machine(on, { bare: ['latex', 'dvipng', 'kpsewhich', 'perl'], env: { HOME: '/home/f' } })
+    const ui = await mountText($, 'Con $\\bigl(x\\bigr)$ y ${\\bf v}$ y $\\left\\lVert x \\right\\rVert$ listo.')
+    expect((await ui.find({ text: /\(x\)/ }))?.text).toContain('listo.')
+  })
+})
+
+describe('what Unicode can write stays in the line', () => {
+  const lineOf = async ($: any, on: any, tex: string) => {
+    machine(on, { bare: ['latex', 'dvipng', 'kpsewhich', 'perl'], env: { HOME: '/home/f' } })
+    const ui = await mountText($, `Antes $${tex}$ después.`)
+    return (await ui.find({ text: /después\./ }))?.text ?? ''
+  }
+  const cases: [string, string][] = [
+    ['\\gcd(a,b)', 'gcd(a,b)'],
+    ['\\Pr(A\\mid B)', 'Pr(A | B)'],
+    ['\\binom{n}{k}', 'C(n,k)'],
+    ['\\sqrt[3]{x}', '∛x'],
+    ['{a+b \\over c}', '(a+b)/c'],
+    ['\\mathbb{E}[X]', '𝔼[X]'],
+    ['\\mathfrak{g}', '𝔤'],
+    ['\\mathcal{O}(\\epsilon^2)', '𝒪(ε²)'],
+    ['\\overline{xy}', 'x̅y̅'],
+    ['^{235}\\mathrm{U}', '²³⁵U'],
+    ['e^{i\\pi}', 'e^(iπ)'],
+    ['T^{\\mu\\nu}', 'T^μν'],
+    ['\\lambda_{\\rm eff}', 'λ\\_eff'],
+  ]
+  for (const [tex, out] of cases) {
+    test(`$${tex}$ -> ${out}`, async ($, on) => {
+      expect(await lineOf($, on, tex)).toContain(`Antes ${out} después.`)
+    })
+  }
+
+  test('things that really need LaTeX still become an equation', async ($, on) => {
+    machine(on, { bare: ['latex', 'dvipng', 'kpsewhich', 'perl'], env: { HOME: '/home/f' } })
+    const ui = await mountText($, 'Antes $\\underbrace{a+b}_{n}$ después.')
+    expect(await ui.find({ type: 'Image' })).toBeDefined() // drawn as a picture, not squeezed into the line
+  })
+})
