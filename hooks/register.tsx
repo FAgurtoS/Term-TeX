@@ -6,7 +6,7 @@ const DPI = 600
 
 type Piece =
   | { kind: 'text'; text: string; code?: true }
-  | { kind: 'math'; tex: string; raw: string }
+  | { kind: 'math'; tex: string; raw: string; inline?: true }
 
 const GREEK: Record<string, string> = {
   alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', varepsilon: 'ε', zeta: 'ζ', eta: 'η',
@@ -25,6 +25,11 @@ const SYMBOLS: Record<string, string> = {
   langle: '⟨', rangle: '⟩', dagger: '†', circ: '∘', degree: '°', emptyset: '∅', neg: '¬',
   land: '∧', lor: '∨', wedge: '∧', vee: '∨', oplus: '⊕', otimes: '⊗', perp: '⊥', parallel: '∥',
   mid: '|', ll: '≪', gg: '≫', angle: '∠', prime: '′', star: '⋆', ast: '∗', div: '÷',
+  Box: '□', square: '□', blacksquare: '■', triangle: '△', bullet: '•', therefore: '∴', because: '∵',
+  varnothing: '∅', setminus: '∖', lesssim: '≲', gtrsim: '≳', simeq: '≃', cong: '≅', doteq: '≐',
+  rightleftharpoons: '⇌', uparrow: '↑', downarrow: '↓', Uparrow: '⇑', Downarrow: '⇓', longrightarrow: '⟶',
+  longleftarrow: '⟵', Longrightarrow: '⟹', Longleftarrow: '⟸', hookrightarrow: '↪', lfloor: '⌊',
+  rfloor: '⌋', lceil: '⌈', rceil: '⌉', sqcup: '⊔', sqcap: '⊓', bigcup: '⋃', bigcap: '⋂', nmid: '∤',
   lbrace: '{', rbrace: '}', lvert: '|', rvert: '|', Re: 'ℜ', Im: 'ℑ', aleph: 'ℵ',
 }
 const FUNCS = ['sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'sinh', 'cosh', 'tanh', 'log', 'ln', 'exp', 'det', 'max', 'min', 'lim', 'sup', 'inf', 'arg', 'dim', 'ker', 'Tr', 'tr']
@@ -32,12 +37,15 @@ const SUP: Record<string, string> = {
   '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
   '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾', a: 'ᵃ', b: 'ᵇ', c: 'ᶜ', d: 'ᵈ', e: 'ᵉ', f: 'ᶠ',
   g: 'ᵍ', h: 'ʰ', i: 'ⁱ', j: 'ʲ', k: 'ᵏ', l: 'ˡ', m: 'ᵐ', n: 'ⁿ', o: 'ᵒ', p: 'ᵖ', r: 'ʳ', s: 'ˢ',
-  t: 'ᵗ', u: 'ᵘ', v: 'ᵛ', w: 'ʷ', x: 'ˣ', y: 'ʸ', z: 'ᶻ', T: 'ᵀ', '′': '′', '†': '†', '°': '°', '*': '*',
+  t: 'ᵗ', u: 'ᵘ', v: 'ᵛ', w: 'ʷ', x: 'ˣ', y: 'ʸ', z: 'ᶻ', T: 'ᵀ',
+  A: 'ᴬ', B: 'ᴮ', D: 'ᴰ', E: 'ᴱ', G: 'ᴳ', H: 'ᴴ', I: 'ᴵ', J: 'ᴶ', K: 'ᴷ', L: 'ᴸ', M: 'ᴹ', N: 'ᴺ',
+  O: 'ᴼ', P: 'ᴾ', R: 'ᴿ', U: 'ᵁ', V: 'ⱽ', W: 'ᵂ', β: 'ᵝ', γ: 'ᵞ', δ: 'ᵟ', θ: 'ᶿ', φ: 'ᵠ', χ: 'ᵡ',
+  '′': '′', '†': '†', '°': '°', '*': '∗',
 }
 const SUB: Record<string, string> = {
   '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
   '+': '₊', '-': '₋', '=': '₌', '(': '₍', ')': '₎', a: 'ₐ', e: 'ₑ', h: 'ₕ', i: 'ᵢ', j: 'ⱼ', k: 'ₖ',
-  l: 'ₗ', m: 'ₘ', n: 'ₙ', o: 'ₒ', p: 'ₚ', r: 'ᵣ', s: 'ₛ', t: 'ₜ', u: 'ᵤ', v: 'ᵥ', x: 'ₓ',
+  l: 'ₗ', m: 'ₘ', n: 'ₙ', o: 'ₒ', p: 'ₚ', r: 'ᵣ', s: 'ₛ', t: 'ₜ', u: 'ᵤ', v: 'ᵥ', x: 'ₓ', β: 'ᵦ', γ: 'ᵧ', ρ: 'ᵨ', φ: 'ᵩ', χ: 'ᵪ',
 }
 const CAL: Record<string, string> = { L: 'ℒ', H: 'ℋ', F: 'ℱ', B: 'ℬ', E: 'ℰ', I: 'ℐ', M: 'ℳ', R: 'ℛ' }
 const BB: Record<string, string> = { R: 'ℝ', C: 'ℂ', N: 'ℕ', Z: 'ℤ', Q: 'ℚ', H: 'ℍ', P: 'ℙ' }
@@ -54,11 +62,13 @@ function toUnicode(tex: string): string | null {
     ok = false
     return ''
   }
-  const script = (arg: string, table: Record<string, string>): string => {
+  // A sub/superscript with a Unicode form is drawn as such; one without (`_R`,
+  // `^∞`) stays on the line as plain text, which beats breaking the sentence.
+  const script = (arg: string, table: Record<string, string>, up: boolean): string => {
     let out = ''
     for (const ch of arg) {
       const m = table[ch]
-      if (m === undefined) return fail()
+      if (m === undefined) return (up ? '^' : '\\_') + (WORD.test(arg) || [...arg].length === 1 ? arg : `(${arg})`)
       out += m
     }
     return out
@@ -155,7 +165,7 @@ function toUnicode(tex: string): string | null {
       const up = tex[i++] === '^'
       const a = arg()
       if (!ok) return ''
-      base += script(a, up ? SUP : SUB)
+      base += script(a, up ? SUP : SUB, up)
     }
     return base
   }
@@ -186,7 +196,7 @@ function inlineScan(chunk: string, push: (p: Piece) => void) {
       } else {
         if (buf) push({ kind: 'text', text: buf })
         buf = ''
-        push({ kind: 'math', tex: m[1].trim(), raw: m[0] })
+        push({ kind: 'math', tex: m[1].trim(), raw: m[0], inline: true })
       }
       from = (m.index ?? 0) + m[0].length
     }
@@ -250,6 +260,47 @@ function hash(s: string): string {
 }
 
 // File access, shell and macro-definition primitives: never compiled.
+// dvipng never draws less than a pixel, so the corner marks that keep the padding
+// come out as white dots; this perl script (zlib is in its core) makes them transparent.
+const CLEAR_CORNERS = String.raw`use strict; use Compress::Zlib;
+my ($in, $out) = @ARGV;
+open(my $fh, '<:raw', $in) or die; local $/; my $d = <$fh>; close $fh;
+my ($pos, $idat, $w, $h, $ct) = (8, '');
+while ($pos < length $d) {
+  my ($n, $t) = unpack('Na4', substr($d, $pos, 8));
+  my $c = substr($d, $pos + 8, $n);
+  if ($t eq 'IHDR') { ($w, $h, undef, $ct) = unpack('NNCC', $c) }
+  $idat .= $c if $t eq 'IDAT';
+  $pos += 12 + $n;
+}
+die "rgba only" unless $ct == 6;
+my $raw = uncompress($idat); my $bpp = 4; my $stride = $w * $bpp;
+my @rows; my $prev = "\0" x $stride; my $p = 0;
+for my $y (0 .. $h - 1) {
+  my $f = ord substr($raw, $p, 1); my @l = unpack('C*', substr($raw, $p + 1, $stride)); $p += 1 + $stride;
+  my @pr = unpack('C*', $prev);
+  for my $x (0 .. $stride - 1) {
+    my $a = $x >= $bpp ? $l[$x - $bpp] : 0; my $b = $pr[$x]; my $c = $x >= $bpp ? $pr[$x - $bpp] : 0;
+    if ($f == 1) { $l[$x] = ($l[$x] + $a) & 255 }
+    elsif ($f == 2) { $l[$x] = ($l[$x] + $b) & 255 }
+    elsif ($f == 3) { $l[$x] = ($l[$x] + (($a + $b) >> 1)) & 255 }
+    elsif ($f == 4) { my $pa = abs($b-$c); my $pb = abs($a-$c); my $pc = abs($a+$b-2*$c);
+      my $q = ($pa <= $pb && $pa <= $pc) ? $a : ($pb <= $pc ? $b : $c); $l[$x] = ($l[$x] + $q) & 255 }
+  }
+  push @rows, \@l; $prev = pack('C*', @l);
+}
+# erase the 4 corner marks (any pixel within 3px of a corner)
+for my $y (0 .. $h - 1) { for my $x (0 .. $w - 1) {
+  next unless ($x < 4 || $x >= $w - 4) && ($y < 4 || $y >= $h - 4);
+  @{$rows[$y]}[$x*4 .. $x*4+3] = (0,0,0,0);
+} }
+my $new = join '', map { "\0" . pack('C*', @$_) } @rows;
+my $z = compress($new);
+sub chunk { my ($t, $b) = @_; pack('N', length $b) . $t . $b . pack('N', crc32($t . $b)) }
+open(my $o, '>:raw', $out) or die;
+print $o "\x89PNG\r\n\x1a\n", chunk('IHDR', pack('NNCCCCC', $w, $h, 8, 6, 0, 0, 0)), chunk('IDAT', $z), chunk('IEND', '');
+close $o;`
+
 const FORBIDDEN = /\\(input|include|openin|openout|read|readline|write|immediate|special|usepackage|documentclass|catcode|csname|InputIfFileExists|verbatiminput|lstinputlisting)(?![a-zA-Z])/
 
 async function themeColor($: any): Promise<string> {
@@ -332,10 +383,12 @@ async function render($: any, tex: string, color: string, sc: number, ratio: num
         if (extra.length === 0) throw new Error(lastError)
       }
       const d = await $.process.run(
-        [DVIPNG, '-T', 'tight', '-bg', 'Transparent', '-D', String(DPI), '-o', `${key}.png`, `${key}.dvi`],
+        [DVIPNG, '-T', 'tight', '-bg', 'Transparent', '-D', String(DPI), '-o', `${key}.raw.png`, `${key}.dvi`],
         { cwd: dir, timeoutMs: 20000 },
       )
       if (d.exitCode !== 0) throw new Error('dvipng failed')
+      const c = await $.process.run(['/usr/bin/perl', '-e', CLEAR_CORNERS, `${key}.raw.png`, `${key}.png`], { cwd: dir, timeoutMs: 20000 })
+      if (c.exitCode !== 0) throw new Error('corner cleanup failed')
     }
     const { base64 } = await $.fs.read(png, { as: 'bytes' })
     const bytes = Uint8Array.fromBase64(base64)
@@ -494,7 +547,7 @@ export const register: Register = (on) => {
       }
       out.push(
         img ? (
-          <Box key={`m${i}`} flexDirection="column" alignItems="center" marginY={1}>
+          <Box key={`m${i}`} flexDirection="column" alignItems={p.inline ? 'flex-start' : 'center'} marginY={p.inline ? 0 : 1}>
             <Image source={{ png: img.b64 }} columns={img.cols} rows={img.rows} alt={p.raw} />
           </Box>
         ) : (
