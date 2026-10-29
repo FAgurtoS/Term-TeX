@@ -2,7 +2,7 @@ import type { Register } from 'claude-code'
 
 const LATEX = '/Library/TeX/texbin/latex'
 const DVIPNG = '/Library/TeX/texbin/dvipng'
-const DPI = 600
+const DPI = 450
 
 type Piece =
   | { kind: 'text'; text: string; code?: true }
@@ -330,6 +330,42 @@ function remember(tex: string) {
   }
 }
 
+// Which optional packages an equation needs, judged from the commands it uses, so
+// the usual equation compiles with the basic set only (each package costs time).
+const NEEDS: [string, RegExp][] = [
+  ['physics', /\\(ket|bra|braket|ketbra|dd|qty|pdv|dv|expval|ev|mqty|pmqty|comm|acomm|grad|curl|laplacian|vb|va|vu|vdot|mel|ip|op|dmat|smat|var|cov|fdv|pderivative|order|eval)(?![a-zA-Z])/],
+  ['bm', /\\bm(?![a-zA-Z])/],
+  ['mathrsfs', /\\mathscr(?![a-zA-Z])/],
+  ['cancel', /\\(cancel|bcancel|xcancel|cancelto)(?![a-zA-Z])/],
+  ['siunitx', /\\(SI|si|num|ang|SIrange|numrange)(?![a-zA-Z])/],
+  ['tensor', /\\(tensor|indices)(?![a-zA-Z])/],
+  ['upgreek', /\\up[a-z]+(?![a-zA-Z])/],
+  ['esint', /\\(oiint|oiiint|varoiint|fint|ointctrclockwise|sqint)(?![a-zA-Z])/],
+  ['stmaryrd', /\\(llbracket|rrbracket|oast|obar|oslash|obslash|lightning|bigsqcap|mapsfrom|Lbag|Rbag)(?![a-zA-Z])/],
+  ['dsfont', /\\mathds(?![a-zA-Z])/],
+  ['mhchem', /\\(ce|pu)(?![a-zA-Z])/],
+  ['cases', /\\begin\{(numcases|subnumcases)\}/],
+  ['units', /\\(unit|unitfrac)(?![a-zA-Z])/],
+  ['nicefrac', /\\nicefrac(?![a-zA-Z])/],
+  ['xfrac', /\\sfrac(?![a-zA-Z])/],
+  ['accents', /\\(accentset|underaccent|undertilde)(?![a-zA-Z])/],
+  ['extarrows', /\\(xlongequal|xLongleftarrow|xLongrightarrow|xlongleftarrow|xlongrightarrow)(?![a-zA-Z])/],
+  ['yhmath', /\\(wideparen|widearc)(?![a-zA-Z])/],
+  ['mathdots', /\\iddots(?![a-zA-Z])/],
+  ['slashed', /\\slashed(?![a-zA-Z])/],
+  ['mathtools', /\\(coloneqq|eqqcolon|coloneq|eqcolon|Coloneqq|mathclap|mathrlap|mathllap|prescript|xmapsto|xhook[a-z]+|xLeft[a-z]+|xRight[a-z]+|xleftrightarrow|xrightleftharpoons|smashoperator|MoveEqLeft|bigtimes)(?![a-zA-Z])|\\begin\{(dcases|rcases|multlined|[pbvBV]?matrix\*)\}/],
+]
+function neededPkgs(tex: string, available: string[]): string[] {
+  return NEEDS.filter(([name, re]) => available.includes(name) && re.test(tex)).map(([name]) => name)
+}
+
+// dvipng builds missing bitmap fonts the first time a resolution is used, and two
+// of them doing that at once break each other; so they take turns (each is ~0.1 s).
+let dvipngTurn: Promise<unknown> = Promise.resolve()
+
+// Equations being compiled right now, so one equation twice in a message is built once.
+const inflight = new Map<string, Promise<Img | null>>()
+
 // Compiles one equation to a PNG whose size is a whole number of terminal
 // cells at `sc` times the text size: TeX pads the equation to that grid, so it
 // is drawn undistorted whatever its own shape. The white corner marks keep
@@ -340,13 +376,27 @@ async function render($: any, tex: string, color: string, sc: number, ratio: num
   const ch = 7 / ratio / sc // and per terminal row
   const key = hash(`${DPI}|${color}|${cw.toFixed(3)}|${ch.toFixed(3)}|${pkgs.length}|${tex}`)
   if (cache.has(key)) return cache.get(key) ?? null
+  const running = inflight.get(key)
+  if (running) return running
+  const job = compile($, tex, color, cw, ch, key)
+  inflight.set(key, job)
+  try {
+    return await job
+  } finally {
+    inflight.delete(key)
+  }
+}
+
+async function compile($: any, tex: string, color: string, cw: number, ch: number, key: string): Promise<Img | null> {
   const home = (await $.env.get('HOME')) ?? ''
   const dir = `${home}/.cache/claude-terminal-math`
   const png = `${dir}/${key}.png`
   try {
     if (!(await $.fs.exists(png))) {
       // With every optional package, then, if that fails, with the basic ones.
-      for (const extra of pkgs.length ? [pkgs, []] : [[]]) {
+      const needed = neededPkgs(tex, pkgs)
+      const attempts = needed.length === pkgs.length ? [needed] : [needed, pkgs]
+      for (const [n, extra] of attempts.entries()) {
         await $.fs.write(
           `${dir}/${key}.tex`,
           [
@@ -380,15 +430,26 @@ async function render($: any, tex: string, color: string, sc: number, ratio: num
         }
         lastError = String(l.stdout).split('\n').find((x: string) => x.startsWith('!')) ?? 'latex failed'
         lastError += `  [${tex.slice(0, 60)}]`
-        if (extra.length === 0) throw new Error(lastError)
+        if (n === attempts.length - 1) throw new Error(lastError)
       }
-      const d = await $.process.run(
-        [DVIPNG, '-T', 'tight', '-bg', 'Transparent', '-D', String(DPI), '-o', `${key}.raw.png`, `${key}.dvi`],
-        { cwd: dir, timeoutMs: 20000 },
-      )
-      if (d.exitCode !== 0) throw new Error('dvipng failed')
-      const c = await $.process.run(['/usr/bin/perl', '-e', CLEAR_CORNERS, `${key}.raw.png`, `${key}.png`], { cwd: dir, timeoutMs: 20000 })
+      const runDvipng = () =>
+        $.process.run(
+          [DVIPNG, '-T', 'tight', '-bg', 'Transparent', '-D', String(DPI), '-o', `${key}.raw.png`, `${key}.dvi`],
+          { cwd: dir, timeoutMs: 30000 },
+        )
+      let d: any
+      for (let tries = 0; tries < 2; tries++) {
+        const mine = dvipngTurn.catch(() => undefined).then(runDvipng)
+        dvipngTurn = mine
+        d = await mine
+        if (d.exitCode === 0) break
+      }
+      if (d.exitCode !== 0) throw new Error(`dvipng failed: ${String(d.stderr).slice(0, 120)}`)
+      // The finished picture appears all at once, never half written.
+      const c = await $.process.run(['/usr/bin/perl', '-e', CLEAR_CORNERS, `${key}.raw.png`, `${key}.part.png`], { cwd: dir, timeoutMs: 20000 })
       if (c.exitCode !== 0) throw new Error('corner cleanup failed')
+      const m = await $.process.run(['/bin/mv', '-f', `${dir}/${key}.part.png`, png])
+      if (m.exitCode !== 0) throw new Error('could not place the picture')
     }
     const { base64 } = await $.fs.read(png, { as: 'bytes' })
     const bytes = Uint8Array.fromBase64(base64)
@@ -399,7 +460,9 @@ async function render($: any, tex: string, color: string, sc: number, ratio: num
     return img
   } catch (err) {
     $.ui.log(`terminal-math: ${String(err)}`, { to: 'debug' })
-    cache.set(key, null)
+    lastError = String(err).replace(/^Error: /, '')
+    // Only a LaTeX error is final; a process that was killed or a busy disk is tried again.
+    if (String(err).includes('latex') || String(err).startsWith('Error: !')) cache.set(key, null)
     return null
   }
 }
@@ -467,7 +530,7 @@ export const register: Register = (on) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'math',
-      description: 'LaTeX math as images: /math on | off | size N | copy [N] | list | debug',
+      description: 'LaTeX math as images: /math on | off | size N | copy [N] | list | reset | debug',
     })
     enabled = (await $.store.get('enabled')) !== false
     const saved = Number(await $.store.get('scale'))
@@ -495,6 +558,11 @@ export const register: Register = (on) => {
 
   on('command.run', { command: 'math' }, async ($, e) => {
     const [a = '', n = ''] = e.args.trim().split(/\s+/)
+    if (a === 'reset') {
+      cache.clear()
+      $.ui.invalidate('ui.render')
+      return { text: 'Equation cache of this session cleared; redrawing.' }
+    }
     if (a === 'debug') return { text: [lastLayout || 'No equation drawn yet.', lastError && `Last LaTeX error: ${lastError}`].filter(Boolean).join('\n') }
     if (a === 'size') {
       const v = Number(n.replace(',', '.'))
@@ -531,6 +599,8 @@ export const register: Register = (on) => {
 
     const { Box, Markdown, Image, Text } = $.ui.resolve(e)
     const color = await themeColor($)
+    // Every equation of the message compiles at the same time.
+    const drawn = pieces.map((p) => (p.kind === 'math' ? render($, p.tex, color, scale, cellRatio) : null))
     const out: any[] = []
     for (const [i, p] of pieces.entries()) {
       if (p.kind === 'text') {
@@ -539,7 +609,7 @@ export const register: Register = (on) => {
       }
       remember(p.tex)
       const room = Math.max(8, (e.viewport?.columns ?? 100) - 4)
-      let img = await render($, p.tex, color, scale, cellRatio)
+      let img = await drawn[i]
       // Wider than the pane: draw it again smaller instead of stretching it.
       if (img && img.cols > room) img = (await render($, p.tex, color, (scale * room * 0.97) / img.cols, cellRatio)) ?? img
       if (img) {
