@@ -18,8 +18,11 @@ terminal's text. The sentences around them are the unchanged reply.*
   does **not** work in other tools: not in Codex CLI, not in the claude.ai chat, not in a plain shell.
 - Equation images are drawn only in a **terminal** that supports the kitty graphics protocol.
   Claude Code's other surfaces (the desktop app's Code tab, the VS Code extension) have not been tried.
-- It has been tested **only with Claude Code in Ghostty on macOS**. Linux and Windows support is
-  written but has not been tried on a real machine (see Platforms).
+- It has been tested with Claude Code in **Ghostty on macOS** and in **kitty on Linux** (Ubuntu on
+  WSL2, through WSLg). Native Windows support is written but untried (see Platforms).
+- Claude Code draws images with kitty's **Unicode placeholders**. A terminal that only implements
+  the basic kitty graphics protocol is not enough: **WezTerm** shows the placeholder characters
+  as text and draws no equation.
 - It is an independent project, not made, endorsed or supported by Anthropic. "Claude" and
   "Claude Code" are trademarks of Anthropic, PBC; they are used here only to say what this
   plugin works with.
@@ -34,7 +37,7 @@ the terminal. It is a tool for reading and checking maths while you work, not a 
 document renderer.
 
 ## Requirements
-- **A terminal with the kitty graphics protocol.** Ghostty, kitty or WezTerm. Elsewhere the
+- **A terminal with the kitty graphics protocol.** Ghostty or kitty (it must support Unicode placeholders; WezTerm and Windows Terminal do not). Elsewhere the
   equations stay as readable text (inline formulas still become Unicode).
 - **TeX** providing `latex`, `dvipng` and the packages `standalone`, `amsmath`, `xcolor`.
   If something is missing, a toast says so once.
@@ -50,11 +53,13 @@ document renderer.
 | | TeX is looked for | perl | cache |
 |---|---|---|---|
 | **macOS** (tested) | PATH, `/Library/TeX/texbin`, Homebrew | `/usr/bin/perl` | `~/.cache/term-tex` |
-| **Linux** (not yet tested on a real machine) | PATH, `/usr/bin`, `/usr/local/texlive/<year>/bin/<arch>` | system perl | `$XDG_CACHE_HOME` or `~/.cache` |
+| **Linux** (tested: Ubuntu on WSL2, kitty) | PATH, `/usr/bin`, `/usr/local/texlive/<year>/bin/<arch>` | system perl | `$XDG_CACHE_HOME` or `~/.cache` |
 | **Windows** (best effort, untested) | PATH, MiKTeX, `C:/texlive/<year>/bin/windows` | TeX Live's or Git's perl, if any | `%LOCALAPPDATA%` |
 
 - Linux packages (Debian/Ubuntu): `texlive-latex-extra texlive-science dvipng perl`.
-- Windows: the graphics protocol needs WezTerm (Windows Terminal does not draw kitty images).
+- Windows: WezTerm and Windows Terminal do **not** draw the equations. WezTerm lacks Unicode
+  placeholders, and ConPTY strips kitty graphics for its WSL domain. What works is kitty running
+  inside WSL2 through WSLg (`sudo apt install kitty`, then `kitty &`).
   With MiKTeX, allow it to install missing packages on the fly, or a first run may stall.
 - If the cell shape is measured wrong (no perl, an odd terminal): `/math ratio 0.46`
   sets the width/height ratio of one cell by hand; `/math ratio auto` measures again.
