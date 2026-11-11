@@ -3,7 +3,7 @@
   "version": "0.5.0",
   "description": "Harness terminal LaTeX for Claude Code: draws the LaTeX in Claude's replies in the terminal, display math as real images (latex + dvipng, kitty graphics) and inline math as Unicode. Toggle with /math.",
   "author": {
-    "name": "Felipe Agurto Sepúlveda",
+    "name": "FAgurtoS",
     "url": "https://github.com/FAgurtoS"
   },
   "homepage": "https://github.com/FAgurtoS/Term-TeX",
